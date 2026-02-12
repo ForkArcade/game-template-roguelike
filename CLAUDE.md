@@ -18,6 +18,20 @@ Narracja MUSI być widoczna w grze:
 - Ekran końcowy pokazuje odpowiedni tekst narracyjny
 - Narracja to nie tylko dane do platformy — gracz MUSI ją widzieć
 
+Wzorzec `showNarrative`:
+```js
+function showNarrative(nodeId) {
+  var textDef = FA.lookup('narrativeText', nodeId);
+  if (textDef) {
+    // life w milisekundach! dt w engine jest w ms (~16.67ms per tick)
+    FA.setState('narrativeMessage', { text: textDef.text, color: textDef.color, life: 4000 });
+  }
+  FA.narrative.transition(nodeId);
+}
+```
+W game loop odliczaj: `if (state.narrativeMessage && state.narrativeMessage.life > 0) state.narrativeMessage.life -= dt;`
+W renderze wyświetlaj pasek z `alpha = Math.min(1, state.narrativeMessage.life / 1000)` dla płynnego fade out.
+
 ## Struktura plików
 
 | Plik | Opis |
@@ -37,7 +51,7 @@ Pliki kopiowane przez platformę (nie edytuj):
 - **Event bus**: `FA.on(event, fn)`, `FA.emit(event, data)`, `FA.off(event, fn)`
 - **State**: `FA.resetState(obj)`, `FA.getState()`, `FA.setState(key, val)`
 - **Registry**: `FA.register(registry, id, def)`, `FA.lookup(registry, id)`, `FA.lookupAll(registry)`
-- **Game loop**: `FA.setUpdate(fn)`, `FA.setRender(fn)`, `FA.start()`, `FA.stop()`
+- **Game loop**: `FA.setUpdate(fn)`, `FA.setRender(fn)`, `FA.start()`, `FA.stop()` — **UWAGA: `dt` jest w milisekundach** (~16.67ms per tick)
 - **Canvas**: `FA.initCanvas(id, w, h)`, `FA.getCtx()`, `FA.getCanvas()`
 - **Layers**: `FA.addLayer(name, drawFn, order)`, `FA.renderLayers()`
 - **Draw**: `FA.draw.clear/rect/text/bar/circle/sprite/withAlpha`
