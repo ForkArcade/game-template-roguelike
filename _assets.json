@@ -1,0 +1,41 @@
+{
+  "style": "Dark fantasy pixel art — ciemne kolory, fioletowe/niebieskie tło, jasne akcenty na postaciach",
+  "gridSize": "8x8 (renderowane w 20x20 tile)",
+  "palette": {
+    "wall-dark": "#1e1638",
+    "wall-lit": "#362a5c",
+    "wall-top": "#4a3a7a",
+    "floor-dark": "#0d0b1a",
+    "floor-lit": "#201c3a",
+    "player": "#4ef",
+    "attack": "#fa4",
+    "health": "#f4a",
+    "mana": "#48f",
+    "gold": "#fd4",
+    "magic": "#f4f",
+    "damage": "#f44",
+    "heal": "#4f4"
+  },
+  "categories": {
+    "tiles": {
+      "sprites": ["wall", "wallLit", "floor", "floorLit", "stairs"],
+      "desc": "Tile'e dungeonu — ściany, podłogi, schody"
+    },
+    "enemies": {
+      "sprites": ["rat", "phantom", "mage", "armor", "golem", "archmage"],
+      "desc": "Potwory — od małych do bossa"
+    },
+    "items": {
+      "sprites": ["potion", "mana", "gold", "weapon", "armor", "spellbook"],
+      "desc": "Przedmioty do zebrania"
+    },
+    "player": {
+      "sprites": ["base", "shielded"],
+      "desc": "Postać gracza"
+    },
+    "effects": {
+      "sprites": ["hit", "heal", "spell"],
+      "desc": "Efekty wizualne walki i magii"
+    }
+  }
+}
