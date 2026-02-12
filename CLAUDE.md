@@ -41,9 +41,12 @@ W renderze wyświetlaj pasek z `alpha = Math.min(1, state.narrativeMessage.life 
 | `render.js` | Warstwy renderowania: mapa, entity, floats, UI, overlay |
 | `main.js` | Entry point: keybindings, event wiring, game loop, `ForkArcade.onReady/submitScore` |
 
+Pliki z szablonu (nie edytuj):
+- `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js` — engine
+
 Pliki kopiowane przez platformę (nie edytuj):
-- `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js`, `fa-narrative.js` — engine
-- `forkarcade-sdk.js` — SDK
+- `forkarcade-sdk.js` — SDK (scoring, auth)
+- `fa-narrative.js` — moduł narracji (graf, zmienne, transition)
 - `sprites.js` — generowany z `_sprites.json`
 
 ## Engine API (window.FA)
