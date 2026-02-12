@@ -2,6 +2,22 @@
 
 Proceduralne dungeony, permadeath, tile-based movement, turowy combat.
 
+## WYMAGANIA — ekrany i narracja
+
+Każda gra MUSI mieć minimum 3 ekrany (stan `screen` w state):
+
+1. **Ekran startowy** (`screen: 'start'`) — tytuł gry, krótki opis, sterowanie, prompt do rozpoczęcia (np. `[SPACJA]`)
+2. **Ekran gry** (`screen: 'playing'`) — właściwa rozgrywka
+3. **Ekran końcowy** (`screen: 'victory'` lub `screen: 'death'`) — tekst narracyjny, statystyki, wynik, prompt do restartu (np. `[R]`)
+
+Narracja MUSI być widoczna w grze:
+
+- Zarejestruj teksty narracyjne: `FA.register('narrativeText', nodeId, { text, color })`
+- Wyświetlaj je w grze (np. pasek u góry ekranu z fade out, linia w logu wiadomości)
+- Wywołuj `showNarrative(nodeId)` przy kluczowych momentach (wejście, pierwszy kill, boss, śmierć, zwycięstwo)
+- Ekran końcowy pokazuje odpowiedni tekst narracyjny
+- Narracja to nie tylko dane do platformy — gracz MUSI ją widzieć
+
 ## Struktura plików
 
 | Plik | Opis |
