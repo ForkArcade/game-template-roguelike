@@ -1,0 +1,4 @@
+{
+  "template": "roguelike",
+  "gameFiles": ["data.js", "game.js", "render.js", "main.js"]
+}

@@ -1,72 +1,71 @@
-const canvas = document.getElementById('game')
-const ctx = canvas.getContext('2d')
+// Roguelike — Game Logic
+// Generacja mapy, ruch, combat, AI, tury
+(function() {
+  'use strict';
+  var FA = window.FA;
 
-// Game state
-let score = 0
+  // === MAP ===
 
-// --- Narrative engine ---
-const narrative = {
-  variables: { corruption: 0, npcs_saved: 0, cursed: false },
-  currentNode: 'surface',
-  graph: {
-    nodes: [
-      { id: 'surface', label: 'Surface', type: 'scene' },
-      { id: 'dungeon-1', label: 'Shallow Dungeon', type: 'scene' },
-      { id: 'npc-encounter', label: 'Trapped NPC', type: 'choice' },
-      { id: 'deep-dungeon', label: 'The Depths', type: 'scene' },
-    ],
-    edges: [
-      { from: 'surface', to: 'dungeon-1' },
-      { from: 'dungeon-1', to: 'npc-encounter' },
-      { from: 'npc-encounter', to: 'deep-dungeon', label: 'Save' },
-    ]
-  },
-
-  transition(nodeId, event) {
-    this.currentNode = nodeId
-    ForkArcade.updateNarrative({
-      variables: this.variables,
-      currentNode: this.currentNode,
-      graph: this.graph,
-      event: event
-    })
-  },
-
-  setVar(name, value, reason) {
-    this.variables[name] = value
-    ForkArcade.updateNarrative({
-      variables: this.variables,
-      currentNode: this.currentNode,
-      graph: this.graph,
-      event: reason || (name + ' = ' + value)
-    })
+  function generateMap(cols, rows) {
+    // TODO: proceduralna generacja dungeonu
+    var map = [];
+    for (var y = 0; y < rows; y++) {
+      map[y] = [];
+      for (var x = 0; x < cols; x++) {
+        map[y][x] = (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) ? 1 : 0;
+      }
+    }
+    return map;
   }
-}
 
-// Initialize when SDK connects to platform
-ForkArcade.onReady(function(context) {
-  console.log('Roguelike ready:', context.slug)
-  narrative.transition('surface', 'Entered the world')
-  start()
-})
+  function isWalkable(map, x, y) {
+    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
+    return map[y][x] === 0;
+  }
 
-function start() {
-  // TODO: implement your roguelike here
-  // Use narrative.transition(nodeId, event) to advance the story
-  // Use narrative.setVar(name, value, reason) to change variables
-  render()
-}
+  // === INIT ===
 
-function render() {
-  ctx.fillStyle = '#000'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  function initGame() {
+    var cfg = FA.lookup('config', 'game');
+    var map = generateMap(cfg.cols, cfg.rows);
 
-  ctx.fillStyle = '#0f0'
-  ctx.font = '24px monospace'
-  ctx.textAlign = 'center'
-  ctx.fillText('Roguelike — implement game.js', canvas.width / 2, canvas.height / 2)
-}
+    FA.resetState({
+      map: map,
+      player: { x: 1, y: 1, hp: 20, maxHp: 20, atk: 5, def: 1, gold: 0, kills: 0 },
+      enemies: [],
+      items: [],
+      messages: [],
+      gameOver: false,
+      turn: 0
+    });
 
-function gameOver() {
-  ForkArcade.submitScore(score)
-}
+    var narCfg = FA.lookup('config', 'narrative');
+    if (narCfg) FA.narrative.init(narCfg);
+  }
+
+  // === MOVEMENT ===
+
+  function movePlayer(dx, dy) {
+    var state = FA.getState();
+    if (state.gameOver) return;
+
+    var nx = state.player.x + dx;
+    var ny = state.player.y + dy;
+
+    // TODO: combat check
+    if (!isWalkable(state.map, nx, ny)) return;
+
+    state.player.x = nx;
+    state.player.y = ny;
+    state.turn++;
+    // TODO: enemy turns, item pickup
+  }
+
+  // === EXPORTS ===
+
+  window.Game = {
+    init: initGame,
+    movePlayer: movePlayer
+  };
+
+})();
