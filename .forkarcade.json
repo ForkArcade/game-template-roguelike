@@ -1,4 +1,5 @@
 {
   "template": "roguelike",
+  "engineFiles": ["fa-engine.js", "fa-renderer.js", "fa-input.js", "fa-audio.js", "fa-narrative.js"],
   "gameFiles": ["data.js", "game.js", "render.js", "main.js"]
 }
