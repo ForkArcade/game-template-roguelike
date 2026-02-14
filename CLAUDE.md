@@ -32,6 +32,7 @@ Pliki kopiowane przez platformę (nie edytuj):
 - **Audio**: `FA.defineSound(name, fn)`, `FA.playSound(name)` — built-in: hit, pickup, death, step, spell, levelup
 - **Effects**: `FA.addFloat(x, y, text, color, dur)`, `FA.addEffect(obj)`, `FA.updateFloats(dt)`
 - **Narrative**: `FA.narrative.init(cfg)`, `.transition(nodeId, event)`, `.setVar(name, val, reason)`
+- **FOV**: `FA.computeFOV(map, px, py, radius, wallValue)` — returns `{ "y,x": true }` hash. Do NOT implement your own FOV.
 - **Utils**: `FA.rand(min,max)`, `FA.clamp`, `FA.pick(arr)`, `FA.shuffle(arr)`, `FA.uid()`
 
 ## Eventy

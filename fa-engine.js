@@ -128,4 +128,35 @@
     return Math.random().toString(36).substr(2, 9);
   };
 
+  // ===== FOV (RAYCASTING) =====
+
+  /**
+   * Compute field of view using 720-ray raycasting.
+   * @param {number[][]} map - 2D array where map[y][x] = tile value
+   * @param {number} px - player x
+   * @param {number} py - player y
+   * @param {number} radius - sight radius in tiles
+   * @param {number} wallValue - tile value that blocks sight (default: 1)
+   * @returns {Object} visible - hash of "y,x" keys for visible tiles
+   */
+  FA.computeFOV = function(map, px, py, radius, wallValue) {
+    if (wallValue === undefined) wallValue = 1;
+    var rows = map.length, cols = map[0].length;
+    var visible = {};
+    visible[py + ',' + px] = true;
+
+    for (var a = 0; a < 720; a++) {
+      var rad = (a / 360) * Math.PI;
+      var dx = Math.cos(rad), dy = Math.sin(rad);
+      for (var d = 1; d <= radius; d++) {
+        var x = Math.round(px + dx * d);
+        var y = Math.round(py + dy * d);
+        if (x < 0 || x >= cols || y < 0 || y >= rows) break;
+        visible[y + ',' + x] = true;
+        if (map[y][x] === wallValue) break;
+      }
+    }
+    return visible;
+  };
+
 })(window);

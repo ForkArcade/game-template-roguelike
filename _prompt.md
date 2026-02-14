@@ -29,7 +29,7 @@ main.js             — ENTRY POINT: keybindings, wiring, ForkArcade.onReady
 
 ### Movement and exploration
 - Turn-based: player moves → enemies react → render
-- FOV: raycasting, radius 5-7 tiles
+- FOV: use `FA.computeFOV(map, px, py, radius, WALL)` — returns `{ "y,x": true }` hash of visible tiles. Do NOT implement your own FOV.
 - Explored but not visible = dimmed
 
 ### Combat
