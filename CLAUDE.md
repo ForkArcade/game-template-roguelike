@@ -26,7 +26,7 @@ Pliki kopiowane przez platformę (nie edytuj):
 - **Registry**: `FA.register(registry, id, def)`, `FA.lookup(registry, id)`, `FA.lookupAll(registry)`
 - **Game loop**: `FA.setUpdate(fn)`, `FA.setRender(fn)`, `FA.start()`, `FA.stop()` — **UWAGA: `dt` jest w milisekundach** (~16.67ms per tick)
 - **Canvas**: `FA.initCanvas(id, w, h)`, `FA.getCtx()`, `FA.getCanvas()`
-- **Layers**: `FA.addLayer(name, drawFn, order)`, `FA.renderLayers()`
+- **Layers**: `FA.addLayer(name, drawFn, order)`, `FA.renderLayers()` — **every layer accessing `state.player`/`state.enemies`/`state.items` MUST start with `if (!state.player) return;`** (title screen has no player; an error in any layer kills the game loop permanently)
 - **Draw**: `FA.draw.clear/rect/text/bar/circle/sprite/withAlpha`
 - **Input**: `FA.bindKey(action, keys)`, `FA.isAction(action)`, `FA.consumeClick()`
 - **Audio**: `FA.defineSound(name, fn)`, `FA.playSound(name)` — built-in: hit, pickup, death, step, spell, levelup

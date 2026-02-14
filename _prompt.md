@@ -117,19 +117,38 @@ FA.register('behaviors', 'ranged', {
 
 ## Rendering (render.js)
 
-Use layer system:
+Use layer system. **Every layer that accesses `state.player`, `state.enemies`, or `state.items` MUST guard against missing state** — the title screen and game-over states don't have these properties. An uncaught error in any layer kills the entire game loop permanently.
+
 ```js
 FA.addLayer('map', function(ctx) {
+  var state = FA.getState();
+  if (!state.map) return;
   // draw tiles with FOV
 }, 0);
 
 FA.addLayer('entities', function(ctx) {
+  var state = FA.getState();
+  if (!state.player) return;  // REQUIRED — no player during title screen
   // draw enemies and player — FA.draw.sprite with fallback
 }, 10);
 
+FA.addLayer('floats', function(ctx) {
+  var state = FA.getState();
+  if (!state.player) return;  // REQUIRED if using camera based on player position
+  // FA.drawFloats()
+}, 20);
+
 FA.addLayer('ui', function(ctx) {
+  var state = FA.getState();
+  if (!state.player) return;  // REQUIRED — no stats during title screen
   // HP/MP bar, floor info, spells — FA.draw.bar, FA.draw.text
 }, 30);
+
+FA.addLayer('title', function(ctx) {
+  var state = FA.getState();
+  if (!state.showTitle) return;
+  // title screen — only needs showTitle flag
+}, 40);
 ```
 
 ## Narrative
