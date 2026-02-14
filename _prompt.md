@@ -1,63 +1,63 @@
 # Roguelike — Game Design Prompt
 
-Tworzysz grę typu Roguelike na platformę ForkArcade. Gra używa multi-file architektury z silnikiem FA.
+You are creating a Roguelike game for the ForkArcade platform. The game uses multi-file architecture with the FA engine.
 
-## Architektura plików
+## File architecture
 
 ```
-forkarcade-sdk.js   — PLATFORMA: SDK (scoring, auth) (nie modyfikuj)
-fa-narrative.js     — PLATFORMA: moduł narracji (nie modyfikuj)
-sprites.js          — generowany z _sprites.json (nie modyfikuj ręcznie)
-fa-engine.js        — ENGINE (z szablonu): game loop, event bus, state, registry (nie modyfikuj)
-fa-renderer.js      — ENGINE (z szablonu): canvas, layers, draw helpers (nie modyfikuj)
-fa-input.js         — ENGINE (z szablonu): keyboard/mouse, keybindings (nie modyfikuj)
-fa-audio.js         — ENGINE (z szablonu): Web Audio, dźwięki (nie modyfikuj)
-data.js             — DANE GRY: definicje wrogów, spelli, itemów, floor'ów
-game.js             — LOGIKA GRY: dungeon gen, FOV, combat, turny, AI
-render.js           — RENDERING: mapa, entity, UI, overlay
+forkarcade-sdk.js   — PLATFORM: SDK (scoring, auth) (do not modify)
+fa-narrative.js     — PLATFORM: narrative module (do not modify)
+sprites.js          — generated from _sprites.json (do not modify manually)
+fa-engine.js        — ENGINE (from template): game loop, event bus, state, registry (do not modify)
+fa-renderer.js      — ENGINE (from template): canvas, layers, draw helpers (do not modify)
+fa-input.js         — ENGINE (from template): keyboard/mouse, keybindings (do not modify)
+fa-audio.js         — ENGINE (from template): Web Audio, sounds (do not modify)
+data.js             — GAME DATA: definitions of enemies, spells, items, floors
+game.js             — GAME LOGIC: dungeon gen, FOV, combat, turns, AI
+render.js           — RENDERING: map, entity, UI, overlay
 main.js             — ENTRY POINT: keybindings, wiring, ForkArcade.onReady
 ```
 
-**Modyfikujesz tylko: `data.js`, `game.js`, `render.js`, `main.js`.**
+**You only modify: `data.js`, `game.js`, `render.js`, `main.js`.**
 
-## Kluczowe mechaniki
+## Key mechanics
 
 ### Dungeon generation
-- Proceduralna generacja (BSP / cellular automata / drunkard walk)
+- Procedural generation (BSP / cellular automata / drunkard walk)
 - Tile-based: wall, floor, stairs
-- Każdy nowy floor = trudniejszy
+- Each new floor = harder
 
-### Ruch i eksploracja
-- Turowy: gracz rusza się → wrogowie reagują → render
-- FOV: raycasting, radius 5-7 tile'i
-- Odkryte ale niewidoczne = przyciemnione
+### Movement and exploration
+- Turn-based: player moves → enemies react → render
+- FOV: raycasting, radius 5-7 tiles
+- Explored but not visible = dimmed
 
 ### Combat
 - Bump-to-attack
-- Formuła: `damage = atk - def + FA.rand(-1, 2)`
-- Wrogowie definiowani przez behavior w registry
+- Formula: `damage = atk - def + FA.rand(-1, 2)`
+- Enemies defined by behavior in registry
 
 ### Permadeath
-- Śmierć = koniec runu → `ForkArcade.submitScore()`
+- Death = end of run → `ForkArcade.submitScore()`
 
 ## Scoring
 ```
 score = (floor * 100) + (kills * 10) + gold + (items * 25) + (boss ? 500 : 0)
 ```
 
-## Jak dodawać zawartość (data.js)
+## How to add content (data.js)
 
-### Nowy wróg
+### New enemy
 ```js
 FA.register('enemies', 'shadow_drake', {
   name: 'Shadow Drake', char: 'D', color: '#808',
   hp: 35, atk: 7, def: 2, xp: 25,
   behavior: 'ranged',
-  lore: 'Smok cieni polujący w ciemnościach'
+  lore: 'Shadow dragon hunting in the darkness'
 });
 ```
 
-### Nowy spell
+### New spell
 ```js
 FA.register('spells', 'Chain Lightning', {
   name: 'Chain Lightning', cost: 5, type: 'chain', range: 6,
@@ -70,26 +70,26 @@ FA.register('spells', 'Chain Lightning', {
 });
 ```
 
-### Nowy item
+### New item
 ```js
 FA.register('items', 'fire_ring', {
   name: 'Ring of Fire', char: 'o', color: '#f84',
   type: 'accessory', atk: 3,
-  description: 'Pierścień płomieni — +3 ATK'
+  description: 'Ring of flames — +3 ATK'
 });
 ```
 
-### Nowy floor
+### New floor
 ```js
 FA.register('floors', 3, {
-  name: 'Zbrojownia',
+  name: 'Armory',
   enemies: [['phantom', 1], ['mage', 2], ['armor', 2]],
-  ambientMessages: ['Metal szczęka...', 'Zbroja się obraca...'],
+  ambientMessages: ['Metal clangs...', 'Armor rotates...'],
   encounters: ['ghost-knight']
 });
 ```
 
-### Nowe zachowanie wroga (behavior)
+### New enemy behavior
 ```js
 FA.register('behaviors', 'ranged', {
   act: function(enemy, state) {
@@ -102,29 +102,29 @@ FA.register('behaviors', 'ranged', {
 });
 ```
 
-## Event bus — kluczowe eventy
+## Event bus — key events
 
-| Event | Payload | Kiedy |
+| Event | Payload | When |
 |-------|---------|-------|
-| `input:action` | `{ action, key }` | Gracz nacisnął klawisz |
-| `entity:damaged` | `{ entity, damage, attacker }` | Ktoś otrzymał obrażenia |
-| `entity:killed` | `{ entity, killer }` | Ktoś zginął |
-| `item:pickup` | `{ item, entity }` | Podniesiono przedmiot |
-| `floor:changed` | `{ floor, name }` | Nowe piętro |
-| `game:over` | `{ victory, score }` | Koniec gry |
-| `message` | `{ text, color }` | Wiadomość do logu |
-| `narrative:transition` | `{ from, to, event }` | Zmiana node'a narracji |
+| `input:action` | `{ action, key }` | Player pressed key |
+| `entity:damaged` | `{ entity, damage, attacker }` | Someone took damage |
+| `entity:killed` | `{ entity, killer }` | Someone died |
+| `item:pickup` | `{ item, entity }` | Item picked up |
+| `floor:changed` | `{ floor, name }` | New floor |
+| `game:over` | `{ victory, score }` | Game over |
+| `message` | `{ text, color }` | Message to log |
+| `narrative:transition` | `{ from, to, event }` | Narrative node change |
 
 ## Rendering (render.js)
 
-Używaj layer system:
+Use layer system:
 ```js
 FA.addLayer('map', function(ctx) {
-  // rysuj tile'e z FOV
+  // draw tiles with FOV
 }, 0);
 
 FA.addLayer('entities', function(ctx) {
-  // rysuj wrogów i gracza — FA.draw.sprite z fallbackiem
+  // draw enemies and player — FA.draw.sprite with fallback
 }, 10);
 
 FA.addLayer('ui', function(ctx) {
@@ -134,7 +134,7 @@ FA.addLayer('ui', function(ctx) {
 
 ## Narrative
 
-Używaj `FA.narrative` (z engine):
+Use `FA.narrative` (from engine):
 ```js
 FA.narrative.init({
   startNode: 'surface',
@@ -142,22 +142,22 @@ FA.narrative.init({
   graph: { nodes: [...], edges: [...] }
 });
 
-FA.narrative.transition('dungeon-1', 'Zszedł na poziom 1');
-FA.narrative.setVar('corruption', 3, 'Dotknął mrocznego artefaktu');
+FA.narrative.transition('dungeon-1', 'Descended to level 1');
+FA.narrative.setVar('corruption', 3, 'Touched dark artifact');
 ```
 
-Typy nodów: `scene`, `choice`, `condition`.
+Node types: `scene`, `choice`, `condition`.
 
-## Sprite'y
+## Sprites
 
-Użyj `create_sprite` i `get_asset_guide` z MCP tools. Integracja:
+Use `create_sprite` and `get_asset_guide` from MCP tools. Integration:
 ```js
 FA.draw.sprite('enemies', 'rat', x, y, tileSize, 'r', '#a86')
 ```
-Ostatnie 2 argumenty = fallback char i kolor gdy brak sprite'a.
+Last 2 arguments = fallback char and color when sprite is missing.
 
-## Czego unikać
-- Real-time zamiast turowego
-- Skomplikowany inventory/crafting
-- Animacje między turami (instant feedback)
-- Modyfikowanie plików ENGINE (fa-*.js)
+## What to avoid
+- Real-time instead of turn-based
+- Complicated inventory/crafting
+- Animations between turns (instant feedback)
+- Modifying ENGINE files (fa-*.js)
