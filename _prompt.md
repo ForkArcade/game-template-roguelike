@@ -1,182 +1,335 @@
 # Roguelike — Game Design Prompt
 
-You are creating a Roguelike game for the ForkArcade platform. The game uses multi-file architecture with the FA engine.
+You are creating a roguelike game for the ForkArcade platform. The game uses multi-file architecture with the FA engine. This prompt describes proven patterns — use them as building blocks, adapt the theme and content to the game concept.
 
 ## File architecture
 
 ```
-forkarcade-sdk.js   — PLATFORM: SDK (scoring, auth) (do not modify)
-fa-narrative.js     — PLATFORM: narrative module (do not modify)
-sprites.js          — generated from _sprites.json (do not modify manually)
-fa-engine.js        — ENGINE (from template): game loop, event bus, state, registry (do not modify)
-fa-renderer.js      — ENGINE (from template): canvas, layers, draw helpers (do not modify)
-fa-input.js         — ENGINE (from template): keyboard/mouse, keybindings (do not modify)
-fa-audio.js         — ENGINE (from template): Web Audio, sounds (do not modify)
-data.js             — GAME DATA: definitions of enemies, spells, items, floors
-game.js             — GAME LOGIC: dungeon gen, FOV, combat, turns, AI
-render.js           — RENDERING: map, entity, UI, overlay
-main.js             — ENTRY POINT: keybindings, wiring, ForkArcade.onReady
+forkarcade-sdk.js   — PLATFORM: SDK (scoring, auth) — do not modify
+fa-narrative.js     — PLATFORM: narrative module — do not modify
+sprites.js          — generated from _sprites.json — do not modify manually
+fa-engine.js        — ENGINE: game loop, event bus, state, registry — do not modify
+fa-renderer.js      — ENGINE: canvas, layers, draw helpers — do not modify
+fa-input.js         — ENGINE: keyboard/mouse, keybindings — do not modify
+fa-audio.js         — ENGINE: Web Audio, sounds — do not modify
+data.js             — GAME DATA: config, enemies, items, modules, narrative, thoughts
+game.js             — GAME LOGIC: dungeon gen, movement, combat, AI, floor management
+render.js           — RENDERING: map, entities, lighting, effects, UI, overlays
+main.js             — ENTRY POINT: keybindings, input routing, game loop, timers
 ```
 
 **You only modify: `data.js`, `game.js`, `render.js`, `main.js`.**
 
-## Key mechanics
+## 3 Screens (mandatory)
 
-### Dungeon generation
-- Procedural generation (BSP / cellular automata / drunkard walk)
-- Tile-based: wall, floor, stairs
-- Each new floor = harder
+Every game MUST have 3 screen states:
+1. **Start** (`screen: 'start'`) — title, description, controls, `[SPACE]` to begin
+2. **Playing** (`screen: 'playing'`) — gameplay
+3. **End** (`screen: 'victory'` / `screen: 'defeat'`) — narrative text, stats, score, `[R]` to restart
 
-### Movement and exploration
-- Turn-based: player moves → enemies react → render
-- FOV: use `FA.computeFOV(map, px, py, radius, WALL)` — returns `{ "y,x": true }` hash of visible tiles. Do NOT implement your own FOV.
-- Explored but not visible = dimmed
+Additional screen: `screen: 'cutscene'` — full-screen typewriter text at key moments.
 
-### Combat
-- Bump-to-attack
-- Formula: `damage = atk - def + FA.rand(-1, 2)`
-- Enemies defined by behavior in registry
+---
 
-### Permadeath
-- Death = end of run → `ForkArcade.submitScore()`
+## Dungeon generation
 
-## Scoring
-```
-score = (floor * 100) + (kills * 10) + gold + (items * 25) + (boss ? 500 : 0)
-```
+Room-based with L-shaped corridors. Proven pattern:
 
-## How to add content (data.js)
-
-### New enemy
 ```js
-FA.register('enemies', 'shadow_drake', {
-  name: 'Shadow Drake', char: 'D', color: '#808',
-  hp: 35, atk: 7, def: 2, xp: 25,
-  behavior: 'ranged',
-  lore: 'Shadow dragon hunting in the darkness'
-});
-```
-
-### New spell
-```js
-FA.register('spells', 'Chain Lightning', {
-  name: 'Chain Lightning', cost: 5, type: 'chain', range: 6,
-  sound: 'spell', effectColor: '#48f',
-  effect: function(caster, targets, state) {
-    var dmg = 6;
-    targets.forEach(function(e) { e.hp -= dmg; });
-    return { msg: 'Chain Lightning!', color: '#48f' };
+function generateFloor(cols, rows, depth, maxDepth) {
+  var map = createEmptyMap(cols, rows);  // fill with walls (1)
+  var rooms = [];
+  // Try placing random non-overlapping rooms
+  for (var attempt = 0; attempt < roomAttempts; attempt++) {
+    // random room { x, y, w, h }
+    // check overlap with 1-tile padding
+    // carve room, connect to previous room center via L-corridor
   }
+  // Place stairs down in last room (tile 2), stairs up in first room (tile 3)
+  // Place interactables (terminals/shrines/etc.) in middle rooms (tile 4)
+  // Create explored[][] grid (all false)
+  return { map, rooms, stairsDown, stairsUp, explored };
+}
+```
+
+Tile values: `0` = floor, `1` = wall, `2` = stairs down, `3` = stairs up, `4` = interactable, `5` = used interactable.
+
+Helper: `findEmptyInRooms(map, rooms, occupied)` — random empty floor tile not in occupied list.
+
+## Multi-floor system
+
+Floors are persistent — leaving and returning preserves state.
+
+```js
+state.floors = {};
+state.floors[depth] = { map, rooms, enemies, items, stairsDown, stairsUp, explored };
+```
+
+`changeFloor(direction)`:
+1. Save current floor's enemies/items/explored to `state.floors[oldDepth]`
+2. Generate new floor if `!state.floors[newDepth]`
+3. Load new floor's map/enemies/items/explored into state
+4. Place player at appropriate stairs position
+
+## Movement & turn structure
+
+Turn cycle: player acts → `endTurn()` → `enemyTurn()` → `checkThoughts()`.
+
+```js
+function movePlayer(dx, dy) {
+  // Check enemy at target → bump attack
+  // Check walkable → move
+  // Check tile type: stairs (changeFloor), interactable (hack/use), floor (pickup items)
+  // Call endTurn()
+}
+```
+
+Item pickup: iterate items at player position, handle by type (gold, potion, module).
+
+## AI state machine
+
+Three states: `patrol → alert → hunting`. Each enemy has:
+```js
+{ aiState: 'patrol', alertTarget: null, alertTimer: 0, patrolTarget: null, stunTurns: 0 }
+```
+
+### State transitions
+- **patrol**: Wander between random room centers. Sentinels stay idle.
+- **alert** (8-turn timer): Investigate sound/last known position. Counts down to patrol.
+- **hunting**: Actively chase player. Loses sight → drops to alert.
+
+### computeEnemyAction(enemy, state)
+1. Calculate distance and LOS to player
+2. Adjacent + not cloaked → always attack (self-defense)
+3. Can see player → transition to hunting
+4. Lost sight while hunting → transition to alert
+5. Alert timer expired → transition to patrol
+6. Return action: `{ type: 'chase'|'flank'|'shoot'|'investigate'|'patrol'|'random'|'idle'|'attack' }`
+
+### Bresenham LOS
+```js
+function hasLOS(map, x1, y1, x2, y2) {
+  // Bresenham line, return false if hitting wall (map[y][x] === 1)
+}
+```
+
+### Sound propagation
+Combat and abilities generate sound. Nearby enemies in patrol/alert switch to alert:
+```js
+function propagateSound(state, x, y, radius) {
+  // For each enemy within Manhattan distance <= radius
+  // Set aiState = 'alert', alertTarget = {x, y}, alertTimer = 8
+  // Add visual sound wave: state.soundWaves.push({tx, ty, maxR: radius, life: 500})
+}
+```
+
+### Movement helpers
+- `moveToward(entity, tx, ty, state, skipIdx)` — prefer axis with greater distance, try alternatives
+- `flankTarget(entity, tx, ty, state, skipIdx)` — move perpendicular to approach angle
+- `randomStep(entity, state, skipIdx)` — shuffle directions, try each
+
+## Combat
+
+### Damage formula
+```js
+var dmg = Math.max(1, atk - def + FA.rand(-1, 2));
+```
+
+### Damage application
+```js
+function applyDamageToPlayer(dmg, sourceName, state) {
+  // Check shield/firewall absorption first
+  state.player.hp -= dmg;
+  state.shake = 6;  // screen shake
+  FA.addFloat(px, py, '-' + dmg, '#f84', 800);
+  addMessage(sourceName + ' deals ' + dmg + ' damage!');
+  // Check death, check low health threshold
+}
+```
+
+### Kill effects
+On enemy death: spawn 8 burst particles in enemy color, emit `entity:killed`, check win condition.
+
+## Module/ability system
+
+Collectible abilities with limited slots (e.g., max 3):
+```js
+state.player.modules = [];  // { type, name, color }
+// Pickup: state.player.modules.push(...)
+// Use: hotkeys 1/2/3 → Game.useModule(slotIdx) → splice from array → apply effect → endTurn()
+```
+
+Register module definitions in data.js:
+```js
+FA.register('modules', 'emp', { name: 'EMP Pulse', char: 'E', color: '#ff0' });
+```
+
+## Effects system
+
+### Screen shake
+```js
+state.shake = 6;  // set on damage
+// In update: state.shake -= dt * 0.012; generate shakeX/shakeY
+// In render: ctx.translate(shakeX, shakeY) before layers, translate back after
+```
+
+### Kill burst particles
+```js
+state.particles.push({ x, y, vx, vy, life: 500, maxLife: 500, color });
+// In update: move by velocity * dt/1000, apply drag (0.97), decrement life
+```
+
+### Sound wave rings
+```js
+state.soundWaves.push({ tx, ty, maxR: radius, life: 500 });
+// In render: expanding circle, alpha fades with progress
+```
+
+### Alert tint
+Count hunting enemies, overlay red with `alpha = huntingRatio * 0.06`.
+
+### Depth corruption
+Random glitch bars with probability scaling by depth: `Math.random() < 0.002 * depth`.
+
+## Thought / inner monologue system
+
+Context-sensitive short thoughts (under 30 chars) displayed as floating bubble above player.
+
+### Data structure
+```js
+FA.register('config', 'thoughts', {
+  floor_enter: { 1: ['...', '...'], 2: ['...', '...'] },  // keyed by depth
+  combat: ['...', '...'],       // random from pool
+  damage: ['...', '...'],
+  low_health: ['...'],
+  ambient: ['...', '...']       // triggered every N turns
 });
 ```
 
-### New item
-```js
-FA.register('items', 'fire_ring', {
-  name: 'Ring of Fire', char: 'o', color: '#f84',
-  type: 'accessory', atk: 3,
-  description: 'Ring of flames — +3 ATK'
-});
-```
+### Trigger system
+`checkThoughts(state)` runs at end of each turn. Compares current state to previous snapshot:
+- depth changed → floor_enter thought
+- kills increased → combat thought
+- hp decreased → damage or low_health thought
+- gold/modules increased → pickup thought
+- every N turns → ambient thought
 
-### New floor
-```js
-FA.register('floors', 3, {
-  name: 'Armory',
-  enemies: [['phantom', 1], ['mage', 2], ['armor', 2]],
-  ambientMessages: ['Metal clangs...', 'Armor rotates...'],
-  encounters: ['ghost-knight']
-});
-```
+5-turn cooldown between thoughts prevents spam.
 
-### New enemy behavior
-```js
-FA.register('behaviors', 'ranged', {
-  act: function(enemy, state) {
-    var p = state.player;
-    var dist = Math.abs(p.x - enemy.x) + Math.abs(p.y - enemy.y);
-    if (dist <= 1) return { type: 'flee', target: p };
-    if (dist <= 3) return { type: 'ranged_attack', target: p };
-    return { type: 'chase', target: p };
-  }
-});
-```
+### Bubble rendering
+Floating above player, follows position, flips below when near top of screen. Typewriter effect with blinking cursor. `[SPC]` dismiss hint. Fades after 8 seconds.
 
-## Event bus — key events
+## Cutscene system
 
-| Event | Payload | When |
-|-------|---------|-------|
-| `input:action` | `{ action, key }` | Player pressed key |
-| `entity:damaged` | `{ entity, damage, attacker }` | Someone took damage |
-| `entity:killed` | `{ entity, killer }` | Someone died |
-| `item:pickup` | `{ item, entity }` | Item picked up |
-| `floor:changed` | `{ floor, name }` | New floor |
-| `game:over` | `{ victory, score }` | Game over |
-| `message` | `{ text, color }` | Message to log |
-| `narrative:transition` | `{ from, to, event }` | Narrative node change |
-
-## Rendering (render.js)
-
-Use layer system. **Every layer that accesses `state.player`, `state.enemies`, or `state.items` MUST guard against missing state** — the title screen and game-over states don't have these properties. An uncaught error in any layer kills the entire game loop permanently.
+Full-screen typewriter text at key narrative moments.
 
 ```js
-FA.addLayer('map', function(ctx) {
-  var state = FA.getState();
-  if (!state.map) return;
-  // draw tiles with FOV
-}, 0);
-
-FA.addLayer('entities', function(ctx) {
-  var state = FA.getState();
-  if (!state.player) return;  // REQUIRED — no player during title screen
-  // draw enemies and player — FA.draw.sprite with fallback
-}, 10);
-
-FA.addLayer('floats', function(ctx) {
-  var state = FA.getState();
-  if (!state.player) return;  // REQUIRED if using camera based on player position
-  // FA.drawFloats()
-}, 20);
-
-FA.addLayer('ui', function(ctx) {
-  var state = FA.getState();
-  if (!state.player) return;  // REQUIRED — no stats during title screen
-  // HP/MP bar, floor info, spells — FA.draw.bar, FA.draw.text
-}, 30);
-
-FA.addLayer('title', function(ctx) {
-  var state = FA.getState();
-  if (!state.showTitle) return;
-  // title screen — only needs showTitle flag
-}, 40);
+function startCutscene(def, state) {
+  state.cutsceneReturn = state.screen;
+  state.screen = 'cutscene';
+  state.cutscene = { lines, color, speed, totalChars, timer: 0, done: false };
+}
+function dismissCutscene() {
+  if (!done) { skip to end; return; }
+  state.screen = state.cutsceneReturn;
+}
 ```
+
+Render: scan lines, screen flicker, per-line typewriter, blinking cursor, `[SPACE]` prompt when done.
+
+## Depth-dependent palettes
+
+Array of color sets indexed by depth. Each palette defines: wall cap, wall face, wall panel, wall side, wall inner, wall line, floor A, floor B, floor dot.
+
+```js
+var PALETTES = [null,
+  { wCap:'#181d30', wFace:'#252b42', ... },  // depth 1: cool
+  { wCap:'#261d18', wFace:'#3b2b20', ... },  // depth 3: warm
+  { wCap:'#301414', wFace:'#451e1e', ... }    // depth 5: hostile
+];
+var pal = PALETTES[depth] || PALETTES[1];
+```
+
+## Wall autotiling
+
+Check 4 neighbors for open space:
+```js
+var openS = isOpen(map, x, y + 1);
+var openN = isOpen(map, x, y - 1);
+var openE = isOpen(map, x + 1, y);
+var openW = isOpen(map, x - 1, y);
+```
+
+- `openS` (facing player): cap top + face below + panel line + vertical dividers
+- `openN`: dark inner + top highlight
+- Neither: solid inner
+- Side accents on `openE`/`openW` edges
+- Deep floors: damage marks on wall faces, cable traces on floor tiles
 
 ## Narrative
 
-Use `FA.narrative` (from engine):
-```js
-FA.narrative.init({
-  startNode: 'surface',
-  variables: { corruption: 0, npcs_saved: 0, cursed: false },
-  graph: { nodes: [...], edges: [...] }
-});
+### Graph structure
+Define acts, paths, climax, endings. Use `FA.narrative.init()` with nodes and edges.
 
-FA.narrative.transition('dungeon-1', 'Descended to level 1');
-FA.narrative.setVar('corruption', 3, 'Touched dark artifact');
+```js
+// Nodes: { id, label, type: 'scene' }
+// Edges: { from, to }
+// Register text: FA.register('narrativeText', nodeId, { text, color })
 ```
 
-Node types: `scene`, `choice`, `condition`.
+### Path detection
+Track player behavior (kills, stealth, collection) and assign a path when thresholds are met. Path determines climax and ending.
+
+### showNarrative pattern
+```js
+function showNarrative(nodeId) {
+  FA.narrative.transition(nodeId);
+  var narText = FA.lookup('narrativeText', nodeId);
+  if (narText) {
+    state.narrativeMessage = { text: narText.text, color: narText.color, life: 4000, maxLife: 4000 };
+    addMessage(narText.text);
+  }
+  // Optionally trigger cutscene if defined
+}
+```
+
+## Message log
+
+Color-coded by content detection:
+```js
+function addMessage(text) {
+  var color = '#556';  // default dim
+  if (text.indexOf('HACK') >= 0) color = '#0ff';
+  else if (text.indexOf('destroyed') >= 0 || text.indexOf('damage') >= 0) color = '#f44';
+  else if (text.charAt(0) === '+') color = '#4f4';
+  // etc.
+  msgs.push({ text, color });
+  if (msgs.length > 6) msgs.shift();
+}
+```
+
+## Scoring
+
+Configurable via registry:
+```js
+FA.register('config', 'scoring', { killMultiplier: 100, goldMultiplier: 10, depthBonus: 500 });
+// score = kills * killMult + gold * goldMult + (maxDepth - 1) * depthBonus
+```
 
 ## Sprites
 
-Sprites are optional — roguelike games work with ASCII fallback. Use `create_sprite` and `get_asset_guide` from MCP tools. Integration:
-```js
-FA.draw.sprite('enemies', 'rat', x, y, tileSize, 'r', '#a86', 0)
-```
-Arguments: category, name, x, y, size, fallbackChar, fallbackColor, frame. Last `frame` param selects variant (variants = frames within one sprite).
+Sprites are optional — ASCII fallback is the base. Use `FA.draw.sprite(category, name, x, y, size, fallbackChar, fallbackColor, frame)`.
+
+### Frame conventions
+- **Enemies**: frame 0 = alive, frame 1 = dead/destroyed variant
+- **Player**: frame 0 = base, frame 1 = shielded/buffed
+- **Tiles**: frames for visual variants (e.g., frame 0 = normal, frame 1 = damaged)
 
 ## What to avoid
-- Real-time instead of turn-based
-- Complicated inventory/crafting
-- Animations between turns (instant feedback)
+
+- Real-time movement (must be turn-based)
+- Complex inventory/crafting systems
+- Animations between turns (instant feedback, floats for damage numbers)
 - Modifying ENGINE files (fa-*.js)
+- Implementing custom FOV — use the lighting layer pattern from render.js
+- Behaviors registered as functions — use AI state machine with string tags instead

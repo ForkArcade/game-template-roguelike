@@ -1,6 +1,6 @@
 {
-  "style": "Dark fantasy pixel art — ciemne kolory, fioletowe/niebieskie tło, jasne akcenty na postaciach",
-  "gridSize": "8x8 (renderowane w 20x20 tile)",
+  "style": "Dark fantasy pixel art — dark purple/blue tones, bright character accents",
+  "gridSize": "8x8 (rendered at 20x20 tile)",
   "palette": {
     "wall-dark": "#1e1638",
     "wall-lit": "#362a5c",
@@ -16,26 +16,31 @@
     "damage": "#f44",
     "heal": "#4f4"
   },
+  "frameConvention": {
+    "enemies": "frame 0 = alive, frame 1 = dead/destroyed variant",
+    "player": "frame 0 = base, frame 1 = shielded/buffed",
+    "tiles": "frames for visual variants (e.g. normal, damaged, lit)"
+  },
   "categories": {
     "tiles": {
       "sprites": ["wall", "wallLit", "floor", "floorLit", "stairs"],
-      "desc": "Tile'e dungeonu — ściany, podłogi, schody"
+      "desc": "Dungeon tiles — walls, floors, stairs"
     },
     "enemies": {
       "sprites": ["rat", "phantom", "mage", "armor", "golem", "archmage"],
-      "desc": "Potwory — od małych do bossa"
+      "desc": "Monsters — small to boss. Each sprite has alive (frame 0) and dead (frame 1) variants"
     },
     "items": {
       "sprites": ["potion", "mana", "gold", "weapon", "armor", "spellbook"],
-      "desc": "Przedmioty do zebrania"
+      "desc": "Collectible items"
     },
     "player": {
       "sprites": ["base", "shielded"],
-      "desc": "Postać gracza"
+      "desc": "Player character"
     },
     "effects": {
       "sprites": ["hit", "heal", "spell"],
-      "desc": "Efekty wizualne walki i magii"
+      "desc": "Visual effects for combat and magic"
     }
   }
 }

@@ -1,71 +1,619 @@
 // Roguelike — Game Logic
-// Generacja mapy, ruch, combat, AI, tury
+// Map generation, movement, combat, AI state machine, floor management, turns
 (function() {
   'use strict';
   var FA = window.FA;
 
-  // === MAP ===
+  // === MAP GENERATION ===
 
-  function generateMap(cols, rows) {
-    // TODO: proceduralna generacja dungeonu
+  function createEmptyMap(cols, rows) {
     var map = [];
     for (var y = 0; y < rows; y++) {
       map[y] = [];
-      for (var x = 0; x < cols; x++) {
-        map[y][x] = (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) ? 1 : 0;
-      }
+      for (var x = 0; x < cols; x++) map[y][x] = 1;
     }
     return map;
   }
 
-  function isWalkable(map, x, y) {
-    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
-    return map[y][x] === 0;
+  function carveRoom(map, room) {
+    for (var y = room.y; y < room.y + room.h; y++) {
+      for (var x = room.x; x < room.x + room.w; x++) map[y][x] = 0;
+    }
   }
 
-  // === INIT ===
+  function carveCorridor(map, x1, y1, x2, y2) {
+    var x = x1, y = y1;
+    while (x !== x2) {
+      if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) map[y][x] = 0;
+      x += x2 > x1 ? 1 : -1;
+    }
+    while (y !== y2) {
+      if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) map[y][x] = 0;
+      y += y2 > y1 ? 1 : -1;
+    }
+    if (y >= 0 && y < map.length && x >= 0 && x < map[0].length) map[y][x] = 0;
+  }
 
-  function initGame() {
+  function roomsOverlap(a, b) {
+    return a.x - 1 < b.x + b.w && a.x + a.w + 1 > b.x &&
+           a.y - 1 < b.y + b.h && a.y + a.h + 1 > b.y;
+  }
+
+  function generateFloor(cols, rows, depth, maxDepth) {
     var cfg = FA.lookup('config', 'game');
-    var map = generateMap(cfg.cols, cfg.rows);
+    var map = createEmptyMap(cols, rows);
+    var rooms = [];
+
+    for (var attempt = 0; attempt < cfg.roomAttempts; attempt++) {
+      var w = FA.rand(cfg.roomMinSize, cfg.roomMaxSize);
+      var h = FA.rand(cfg.roomMinSize, cfg.roomMaxSize);
+      var x = FA.rand(1, cols - w - 1);
+      var y = FA.rand(1, rows - h - 1);
+      var room = { x: x, y: y, w: w, h: h };
+
+      var overlaps = false;
+      for (var r = 0; r < rooms.length; r++) {
+        if (roomsOverlap(room, rooms[r])) { overlaps = true; break; }
+      }
+      if (overlaps) continue;
+
+      carveRoom(map, room);
+      if (rooms.length > 0) {
+        var prev = rooms[rooms.length - 1];
+        var cx1 = Math.floor(prev.x + prev.w / 2);
+        var cy1 = Math.floor(prev.y + prev.h / 2);
+        var cx2 = Math.floor(room.x + room.w / 2);
+        var cy2 = Math.floor(room.y + room.h / 2);
+        if (FA.rand(0, 1) === 0) {
+          carveCorridor(map, cx1, cy1, cx2, cy1);
+          carveCorridor(map, cx2, cy1, cx2, cy2);
+        } else {
+          carveCorridor(map, cx1, cy1, cx1, cy2);
+          carveCorridor(map, cx1, cy2, cx2, cy2);
+        }
+      }
+      rooms.push(room);
+    }
+
+    // Fallback if not enough rooms
+    if (rooms.length < 2) {
+      rooms = [{ x: 2, y: 2, w: 5, h: 5 }, { x: cols - 8, y: rows - 8, w: 5, h: 5 }];
+      carveRoom(map, rooms[0]);
+      carveRoom(map, rooms[1]);
+      carveCorridor(map, 4, 4, cols - 6, rows - 6);
+    }
+
+    // Stairs
+    var stairsDown = null;
+    if (depth < maxDepth) {
+      var lastRoom = rooms[rooms.length - 1];
+      var sdx = Math.floor(lastRoom.x + lastRoom.w / 2);
+      var sdy = Math.floor(lastRoom.y + lastRoom.h / 2);
+      map[sdy][sdx] = 2;
+      stairsDown = { x: sdx, y: sdy };
+    }
+    var stairsUp = null;
+    if (depth > 1) {
+      var firstRoom = rooms[0];
+      var sux = Math.floor(firstRoom.x + firstRoom.w / 2);
+      var suy = Math.floor(firstRoom.y + firstRoom.h / 2);
+      map[suy][sux] = 3;
+      stairsUp = { x: sux, y: suy };
+    }
+
+    // TODO: place interactables (tile 4) in middle rooms
+
+    // Explored grid
+    var explored = [];
+    for (var ey = 0; ey < rows; ey++) {
+      explored[ey] = [];
+      for (var ex = 0; ex < cols; ex++) explored[ey][ex] = false;
+    }
+
+    return { map: map, rooms: rooms, stairsDown: stairsDown, stairsUp: stairsUp, explored: explored };
+  }
+
+  function findEmptyInRooms(map, rooms, occupied) {
+    for (var i = 0; i < 200; i++) {
+      var room = FA.pick(rooms);
+      var x = FA.rand(room.x, room.x + room.w - 1);
+      var y = FA.rand(room.y, room.y + room.h - 1);
+      if (map[y][x] !== 0) continue;
+      var taken = false;
+      for (var j = 0; j < occupied.length; j++) {
+        if (occupied[j].x === x && occupied[j].y === y) { taken = true; break; }
+      }
+      if (!taken) return { x: x, y: y };
+    }
+    return { x: rooms[0].x + 1, y: rooms[0].y + 1 };
+  }
+
+  function isWalkable(map, x, y) {
+    if (y < 0 || y >= map.length || x < 0 || x >= map[0].length) return false;
+    return map[y][x] !== 1;
+  }
+
+  // === POPULATE FLOOR ===
+
+  function populateFloor(map, rooms, depth) {
+    var occupied = [];
+    var enemies = [];
+    var items = [];
+
+    // TODO: spawn enemies based on depth
+    // Each enemy needs: id, x, y, hp, maxHp, atk, def, char, color, name, behavior, stunTurns,
+    //   aiState: 'patrol', alertTarget: null, alertTimer: 0, patrolTarget: null
+
+    // TODO: spawn items (gold, potions, modules) based on depth
+
+    return { enemies: enemies, items: items };
+  }
+
+  // === SCREENS ===
+
+  function startGame() {
+    FA.resetState({ screen: 'start' });
+    FA.clearEffects();
+  }
+
+  function beginPlaying() {
+    var cfg = FA.lookup('config', 'game');
+    var floor = generateFloor(cfg.cols, cfg.rows, 1, cfg.maxDepth);
+    var populated = populateFloor(floor.map, floor.rooms, 1);
+
+    var firstRoom = floor.rooms[0];
+    var px = Math.floor(firstRoom.x + firstRoom.w / 2);
+    var py = Math.floor(firstRoom.y + firstRoom.h / 2);
+    if (floor.map[py][px] !== 0) { px = firstRoom.x + 1; py = firstRoom.y + 1; }
+
+    var floors = {};
+    floors[1] = {
+      map: floor.map, rooms: floor.rooms,
+      enemies: populated.enemies, items: populated.items,
+      stairsDown: floor.stairsDown, stairsUp: floor.stairsUp,
+      explored: floor.explored
+    };
 
     FA.resetState({
-      map: map,
-      player: { x: 1, y: 1, hp: 20, maxHp: 20, atk: 5, def: 1, gold: 0, kills: 0 },
-      enemies: [],
-      items: [],
+      screen: 'playing',
+      map: floor.map,
+      explored: floor.explored,
+      player: {
+        x: px, y: py, hp: 20, maxHp: 20, atk: 5, def: 1, gold: 0, kills: 0,
+        modules: []
+        // TODO: add buff fields (cloakTurns, overclockActive, firewallHp, etc.)
+      },
+      enemies: populated.enemies,
+      items: populated.items,
+      depth: 1,
+      maxDepthReached: 1,
+      floors: floors,
       messages: [],
-      gameOver: false,
-      turn: 0
+      narrativeMessage: null,
+      turn: 0,
+      shake: 0, particles: [], soundWaves: [],
+      thoughts: [], lastThoughtTurn: -10
     });
 
+    FA.clearEffects();
     var narCfg = FA.lookup('config', 'narrative');
     if (narCfg) FA.narrative.init(narCfg);
+    showNarrative('start');
+  }
+
+  // === FLOOR TRANSITION ===
+
+  function changeFloor(direction) {
+    var state = FA.getState();
+    var cfg = FA.lookup('config', 'game');
+    var oldDepth = state.depth;
+    var newDepth = direction === 'down' ? oldDepth + 1 : oldDepth - 1;
+
+    // Save current floor
+    state.floors[oldDepth].enemies = state.enemies;
+    state.floors[oldDepth].items = state.items;
+    state.floors[oldDepth].explored = state.explored;
+
+    // Generate or load target floor
+    if (!state.floors[newDepth]) {
+      var floor = generateFloor(cfg.cols, cfg.rows, newDepth, cfg.maxDepth);
+      var populated = populateFloor(floor.map, floor.rooms, newDepth);
+      state.floors[newDepth] = {
+        map: floor.map, rooms: floor.rooms,
+        enemies: populated.enemies, items: populated.items,
+        stairsDown: floor.stairsDown, stairsUp: floor.stairsUp,
+        explored: floor.explored
+      };
+    }
+
+    var target = state.floors[newDepth];
+    state.map = target.map;
+    state.enemies = target.enemies;
+    state.items = target.items;
+    state.explored = target.explored;
+    state.depth = newDepth;
+    if (newDepth > state.maxDepthReached) state.maxDepthReached = newDepth;
+
+    // Place player at appropriate stairs
+    if (direction === 'down' && target.stairsUp) {
+      state.player.x = target.stairsUp.x;
+      state.player.y = target.stairsUp.y;
+    } else if (direction === 'up' && target.stairsDown) {
+      state.player.x = target.stairsDown.x;
+      state.player.y = target.stairsDown.y;
+    }
+
+    FA.clearEffects();
+    addMessage(direction === 'down' ? '> Descending to level ' + newDepth + '...' : '> Returning to level ' + newDepth + '...');
+    triggerThought('floor_enter', newDepth);
+  }
+
+  // === NARRATIVE ===
+
+  function showNarrative(nodeId) {
+    FA.narrative.transition(nodeId);
+    var narText = FA.lookup('narrativeText', nodeId);
+    if (narText) {
+      FA.getState().narrativeMessage = { text: narText.text, color: narText.color, life: 4000, maxLife: 4000 };
+      addMessage(narText.text);
+    }
+    // TODO: check for cutscene definition and trigger if exists
   }
 
   // === MOVEMENT ===
 
   function movePlayer(dx, dy) {
     var state = FA.getState();
-    if (state.gameOver) return;
-
+    if (state.screen !== 'playing') return;
     var nx = state.player.x + dx;
     var ny = state.player.y + dy;
 
-    // TODO: combat check
-    if (!isWalkable(state.map, nx, ny)) return;
+    // Bump attack
+    for (var i = 0; i < state.enemies.length; i++) {
+      if (state.enemies[i].x === nx && state.enemies[i].y === ny) {
+        attackEnemy(state.player, state.enemies[i], i);
+        endTurn();
+        return;
+      }
+    }
 
+    if (!isWalkable(state.map, nx, ny)) return;
     state.player.x = nx;
     state.player.y = ny;
+    FA.playSound('step');
+
+    // Tile interactions
+    var tile = state.map[ny][nx];
+    if (tile === 2) { changeFloor('down'); return; }
+    if (tile === 3) { changeFloor('up'); return; }
+    // TODO: tile 4 = interactable (terminal/shrine)
+
+    // Item pickup
+    for (var j = state.items.length - 1; j >= 0; j--) {
+      if (state.items[j].x === nx && state.items[j].y === ny) {
+        pickupItem(state.items[j], j);
+      }
+    }
+    endTurn();
+  }
+
+  function attackEnemy(attacker, target, idx) {
+    var state = FA.getState();
+    var cfg = FA.lookup('config', 'game');
+    var ts = cfg.tileSize;
+    var dmg = Math.max(1, attacker.atk - target.def + FA.rand(-1, 2));
+    target.hp -= dmg;
+    FA.emit('entity:damaged', { entity: target, damage: dmg });
+    FA.addFloat(target.x * ts + ts / 2, target.y * ts, '-' + dmg, '#f44', 800);
+    addMessage('You deal ' + dmg + ' to ' + target.name + '.');
+    propagateSound(state, target.x, target.y, 8);
+
+    if (target.hp <= 0) {
+      state.enemies.splice(idx, 1);
+      state.player.kills++;
+      FA.emit('entity:killed', { entity: target });
+
+      // Kill burst particles
+      var bx = target.x * ts + ts / 2, by = target.y * ts + ts / 2;
+      for (var pi = 0; pi < 8; pi++) {
+        var angle = (pi / 8) * Math.PI * 2 + Math.random() * 0.5;
+        state.particles.push({
+          x: bx, y: by,
+          vx: Math.cos(angle) * (40 + Math.random() * 30),
+          vy: Math.sin(angle) * (40 + Math.random() * 30),
+          life: 500, maxLife: 500, color: target.color
+        });
+      }
+      addMessage(target.name + ' destroyed.');
+      // TODO: check win condition, check path/climax
+    }
+  }
+
+  function pickupItem(item, idx) {
+    var state = FA.getState();
+    state.items.splice(idx, 1);
+    FA.emit('item:pickup', { item: item });
+    // TODO: handle by item.type (gold, potion, module)
+    addMessage('Picked up ' + (item.name || item.type) + '.');
+  }
+
+  // === AI SYSTEM ===
+
+  function hasLOS(map, x1, y1, x2, y2) {
+    var dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
+    var sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1;
+    var err = dx - dy;
+    var cx = x1, cy = y1;
+    while (true) {
+      if (cx === x2 && cy === y2) return true;
+      var e2 = err * 2;
+      if (e2 > -dy) { err -= dy; cx += sx; }
+      if (e2 < dx) { err += dx; cy += sy; }
+      if (cx === x2 && cy === y2) return true;
+      if (cy < 0 || cy >= map.length || cx < 0 || cx >= map[0].length) return false;
+      if (map[cy][cx] === 1) return false;
+    }
+  }
+
+  function canStep(x, y, state, skipIdx) {
+    if (!isWalkable(state.map, x, y)) return false;
+    if (isOccupied(x, y, skipIdx)) return false;
+    if (x === state.player.x && y === state.player.y) return false;
+    return true;
+  }
+
+  function isOccupied(x, y, skipIdx) {
+    var enemies = FA.getState().enemies;
+    for (var i = 0; i < enemies.length; i++) {
+      if (i === skipIdx) continue;
+      if (enemies[i].x === x && enemies[i].y === y) return true;
+    }
+    return false;
+  }
+
+  function moveToward(e, tx, ty, state, skipIdx) {
+    var dx = tx - e.x, dy = ty - e.y;
+    var sx = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+    var sy = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+    var moves;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      moves = [{dx: sx, dy: 0}, {dx: 0, dy: sy || 1}, {dx: 0, dy: -(sy || 1)}];
+    } else {
+      moves = [{dx: 0, dy: sy}, {dx: sx || 1, dy: 0}, {dx: -(sx || 1), dy: 0}];
+    }
+    for (var i = 0; i < moves.length; i++) {
+      if (moves[i].dx === 0 && moves[i].dy === 0) continue;
+      var nx = e.x + moves[i].dx, ny = e.y + moves[i].dy;
+      if (canStep(nx, ny, state, skipIdx)) {
+        e.x = nx; e.y = ny;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function flankTarget(e, tx, ty, state, skipIdx) {
+    var dx = tx - e.x, dy = ty - e.y;
+    var moves;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      moves = [{dx: 0, dy: 1}, {dx: 0, dy: -1}];
+    } else {
+      moves = [{dx: 1, dy: 0}, {dx: -1, dy: 0}];
+    }
+    if (Math.random() > 0.5) { var t = moves[0]; moves[0] = moves[1]; moves[1] = t; }
+    for (var i = 0; i < moves.length; i++) {
+      var nx = e.x + moves[i].dx, ny = e.y + moves[i].dy;
+      if (canStep(nx, ny, state, skipIdx)) {
+        e.x = nx; e.y = ny;
+        return true;
+      }
+    }
+    return moveToward(e, tx, ty, state, skipIdx);
+  }
+
+  function randomStep(e, state, skipIdx) {
+    var dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (var i = dirs.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = dirs[i]; dirs[i] = dirs[j]; dirs[j] = t;
+    }
+    for (var d = 0; d < dirs.length; d++) {
+      var nx = e.x + dirs[d][0], ny = e.y + dirs[d][1];
+      if (canStep(nx, ny, state, skipIdx)) {
+        e.x = nx; e.y = ny;
+        return;
+      }
+    }
+  }
+
+  function propagateSound(state, x, y, radius) {
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.aiState === 'hunting') continue;
+      var dist = Math.abs(e.x - x) + Math.abs(e.y - y);
+      if (dist <= radius) {
+        e.aiState = 'alert';
+        e.alertTarget = { x: x, y: y };
+        e.alertTimer = 8;
+      }
+    }
+    if (state.soundWaves) state.soundWaves.push({ tx: x, ty: y, maxR: radius, life: 500 });
+  }
+
+  function computeEnemyAction(e, state) {
+    var p = state.player;
+    var dist = Math.abs(e.x - p.x) + Math.abs(e.y - p.y);
+    var sightRange = 8;  // TODO: vary by enemy behavior
+    var canSee = dist <= sightRange && hasLOS(state.map, e.x, e.y, p.x, p.y);
+
+    // Adjacent = always attack
+    if (dist === 1) {
+      e.aiState = 'hunting';
+      return { type: 'attack' };
+    }
+
+    // State transitions
+    if (canSee) {
+      e.aiState = 'hunting';
+      e.alertTarget = { x: p.x, y: p.y };
+    } else if (e.aiState === 'hunting') {
+      e.aiState = 'alert';
+      e.alertTimer = 8;
+    }
+
+    if (e.aiState === 'alert') {
+      e.alertTimer--;
+      if (e.alertTimer <= 0) {
+        e.aiState = 'patrol';
+        e.alertTarget = null;
+        e.patrolTarget = null;
+      }
+    }
+
+    switch (e.aiState) {
+      case 'hunting':
+        return { type: 'chase' };
+      case 'alert':
+        if (e.alertTarget) {
+          if (e.x === e.alertTarget.x && e.y === e.alertTarget.y) return { type: 'random' };
+          return { type: 'investigate' };
+        }
+        return { type: 'random' };
+      default:  // patrol
+        if (!e.patrolTarget || (e.x === e.patrolTarget.x && e.y === e.patrolTarget.y)) {
+          var rooms = state.floors[state.depth].rooms;
+          var room = rooms[Math.floor(Math.random() * rooms.length)];
+          e.patrolTarget = { x: Math.floor(room.x + room.w / 2), y: Math.floor(room.y + room.h / 2) };
+        }
+        return { type: 'patrol' };
+    }
+  }
+
+  function applyDamageToPlayer(dmg, sourceName, state) {
+    // TODO: check shield/firewall absorption
+    state.player.hp -= dmg;
+    state.shake = 6;
+    FA.emit('entity:damaged', { entity: state.player, damage: dmg });
+    var cfg = FA.lookup('config', 'game');
+    var ts = cfg.tileSize;
+    FA.addFloat(state.player.x * ts + ts / 2, state.player.y * ts, '-' + dmg, '#f84', 800);
+    addMessage(sourceName + ' deals ' + dmg + ' damage!');
+    if (state.player.hp <= 0) {
+      endGame(false);
+    }
+  }
+
+  function enemyTurn() {
+    var state = FA.getState();
+    for (var i = 0; i < state.enemies.length; i++) {
+      var e = state.enemies[i];
+      if (e.stunTurns > 0) { e.stunTurns--; continue; }
+
+      var action = computeEnemyAction(e, state);
+
+      switch (action.type) {
+        case 'attack':
+          var dmg = Math.max(1, e.atk - state.player.def + FA.rand(-1, 1));
+          applyDamageToPlayer(dmg, e.name, state);
+          if (state.player.hp <= 0) return;
+          break;
+        case 'chase':
+          moveToward(e, state.player.x, state.player.y, state, i);
+          break;
+        case 'flank':
+          flankTarget(e, state.player.x, state.player.y, state, i);
+          break;
+        case 'investigate':
+          moveToward(e, e.alertTarget.x, e.alertTarget.y, state, i);
+          break;
+        case 'patrol':
+          if (e.patrolTarget) moveToward(e, e.patrolTarget.x, e.patrolTarget.y, state, i);
+          break;
+        case 'random':
+          randomStep(e, state, i);
+          break;
+      }
+    }
+  }
+
+  function endTurn() {
+    var state = FA.getState();
+    if (state.screen !== 'playing') return;
     state.turn++;
-    // TODO: enemy turns, item pickup
+    enemyTurn();
+    checkThoughts(state);
+  }
+
+  function endGame(victory) {
+    var state = FA.getState();
+    state.screen = victory ? 'victory' : 'defeat';
+    var scoring = FA.lookup('config', 'scoring');
+    state.score = (state.player.kills * scoring.killMultiplier) +
+                  (state.player.gold * scoring.goldMultiplier) +
+                  ((state.maxDepthReached - 1) * scoring.depthBonus);
+    FA.emit('game:over', { victory: victory, score: state.score });
+  }
+
+  // === MESSAGES ===
+
+  function addMessage(text) {
+    var color = '#556';
+    if (text.indexOf('destroyed') >= 0 || text.indexOf('damage') >= 0) color = '#f44';
+    else if (text.charAt(0) === '+') color = '#4f4';
+    else if (text.charAt(0) === '>') color = '#8af';
+    // TODO: add more auto-detection patterns
+    var msgs = FA.getState().messages;
+    msgs.push({ text: text, color: color });
+    if (msgs.length > 6) msgs.shift();
+  }
+
+  // === THOUGHT SYSTEM ===
+
+  function addThought(text) {
+    var state = FA.getState();
+    state.thoughts.push({ text: text, timer: 0, speed: 30, done: false, life: 8000 });
+    if (state.thoughts.length > 4) state.thoughts.shift();
+    state.lastThoughtTurn = state.turn;
+  }
+
+  function triggerThought(category, key) {
+    var state = FA.getState();
+    if (state.turn - (state.lastThoughtTurn || 0) < 5) return;
+    var thoughts = FA.lookup('config', 'thoughts');
+    if (!thoughts || !thoughts[category]) return;
+    var pool = key !== undefined ? thoughts[category][key] : thoughts[category];
+    if (!pool || !pool.length) return;
+    addThought(pool[Math.floor(Math.random() * pool.length)]);
+  }
+
+  function checkThoughts(state) {
+    var prev = state._prevThought || {};
+    if (state.depth !== prev.depth) triggerThought('floor_enter', state.depth);
+    if (state.player.kills > (prev.kills || 0)) triggerThought('combat');
+    if (state.player.hp < (prev.hp || state.player.maxHp)) {
+      if (state.player.hp < state.player.maxHp * 0.3) triggerThought('low_health');
+      else triggerThought('damage');
+    }
+    if (state.turn > 0 && state.turn % 20 === 0) triggerThought('ambient');
+    // TODO: add more triggers (pickup, terminal hack, path activation)
+    state._prevThought = {
+      depth: state.depth, kills: state.player.kills, hp: state.player.hp
+    };
+  }
+
+  function dismissThought() {
+    FA.getState().thoughts = [];
   }
 
   // === EXPORTS ===
 
   window.Game = {
-    init: initGame,
-    movePlayer: movePlayer
+    start: startGame,
+    begin: beginPlaying,
+    movePlayer: movePlayer,
+    useModule: function(idx) { /* TODO */ },
+    dismissCutscene: function() { /* TODO */ },
+    dismissThought: dismissThought
   };
 
 })();

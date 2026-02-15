@@ -1,5 +1,5 @@
 // Roguelike — Data
-// Rejestracja danych gry: config, wrogowie, itemy, zachowania, scoring, narracja
+// Game data registration: config, enemies, items, modules, narrative, thoughts
 (function() {
   'use strict';
   var FA = window.FA;
@@ -9,27 +9,39 @@
     cols: 40, rows: 25,
     tileSize: 20,
     canvasWidth: 800,
-    canvasHeight: 600
+    canvasHeight: 600,
+    maxDepth: 5,
+    roomAttempts: 30,
+    roomMinSize: 4,
+    roomMaxSize: 9
   });
 
   FA.register('config', 'colors', {
     bg: '#0d0b1a', wall: '#1e1638', floor: '#201c3a',
-    player: '#4ef', text: '#ddd', dim: '#777'
+    player: '#4ef', enemy: '#fa3', gold: '#fd4', potion: '#4f4',
+    stairsDown: '#f80', stairsUp: '#4cf',
+    terminal: '#0ff', terminalUsed: '#334',
+    text: '#bcc8dd', dim: '#556', narrative: '#8af'
   });
 
   FA.register('config', 'scoring', {
     killMultiplier: 100,
-    goldMultiplier: 10
+    goldMultiplier: 10,
+    depthBonus: 500
   });
 
   // === ENEMIES ===
-  // FA.register('enemies', id, { name, char, color, hp, atk, def, xp, behavior })
+  // behavior is a string tag used by AI state machine in game.js
+  // FA.register('enemies', 'id', { name, char, color, hp, atk, def, xp, behavior })
 
   // === ITEMS ===
-  // FA.register('items', id, { name, type, char, color, ... })
+  // FA.register('items', 'id', { name, type, char, color, value/healAmount/... })
 
-  // === BEHAVIORS ===
-  // FA.register('behaviors', id, { act: function(entity, state) { return {type:'move', dx, dy} } })
+  // === MODULES (collectible abilities, max 3 slots) ===
+  // FA.register('modules', 'id', { name, char, color })
+
+  // === INTERACTABLE INTEL (random text from terminals/shrines) ===
+  // FA.register('config', 'terminals', { intel: ['...', '...'] });
 
   // === NARRATIVE ===
   FA.register('config', 'narrative', {
@@ -37,10 +49,31 @@
     variables: {},
     graph: {
       nodes: [
-        { id: 'start', label: 'Poczatek', type: 'scene' }
+        { id: 'start', label: 'Beginning', type: 'scene' }
+        // TODO: add act nodes, path nodes, ending nodes
       ],
       edges: []
     }
+  });
+
+  // Narrative text — register one per narrative node
+  // FA.register('narrativeText', 'start', { text: '> ...', color: '#4ef' });
+
+  // Cutscenes — full-screen typewriter text at key moments
+  // FA.register('cutscenes', 'nodeId', { lines: ['...'], color: '#4ef', speed: 30 });
+
+  // === THOUGHTS (inner monologue — short lines, under 30 chars) ===
+  FA.register('config', 'thoughts', {
+    floor_enter: {
+      // keyed by depth: 1: ['...'], 2: ['...'], ...
+    },
+    combat: [],
+    damage: [],
+    low_health: [],
+    // pickup_gold: [],
+    // pickup_module: [],
+    // terminal_hack: [],
+    ambient: []
   });
 
 })();
