@@ -51,6 +51,6 @@ Pliki kopiowane przez platformę (nie edytuj):
 
 `ForkArcade.submitScore(score)` w obsłudze `game:over`.
 
-## Sprite fallback
+## Sprites (optional — ASCII is the base)
 
-`FA.draw.sprite(category, name, x, y, size, fallbackChar, fallbackColor)` — jeśli brak sprite'a, rysuje tekst.
+`FA.draw.sprite(category, name, x, y, size, fallbackChar, fallbackColor, frame)` — renders sprite frame, or fallback text when no sprite exists. Sprites are optional in roguelike — games work with ASCII fallback characters. Frame index selects which variant to render (variants = frames within one sprite).

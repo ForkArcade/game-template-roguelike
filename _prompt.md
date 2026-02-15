@@ -169,11 +169,11 @@ Node types: `scene`, `choice`, `condition`.
 
 ## Sprites
 
-Use `create_sprite` and `get_asset_guide` from MCP tools. Integration:
+Sprites are optional — roguelike games work with ASCII fallback. Use `create_sprite` and `get_asset_guide` from MCP tools. Integration:
 ```js
-FA.draw.sprite('enemies', 'rat', x, y, tileSize, 'r', '#a86')
+FA.draw.sprite('enemies', 'rat', x, y, tileSize, 'r', '#a86', 0)
 ```
-Last 2 arguments = fallback char and color when sprite is missing.
+Arguments: category, name, x, y, size, fallbackChar, fallbackColor, frame. Last `frame` param selects variant (variants = frames within one sprite).
 
 ## What to avoid
 - Real-time instead of turn-based

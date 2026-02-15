@@ -26,7 +26,7 @@
       var state = FA.getState();
       if (!state.player) return;
       var p = state.player;
-      FA.draw.sprite('player', 'base', p.x * ts, p.y * ts, ts, '@', colors.player);
+      FA.draw.sprite('player', 'base', p.x * ts, p.y * ts, ts, '@', colors.player, 0);
       // TODO: render enemies, items
     }, 10);
 
