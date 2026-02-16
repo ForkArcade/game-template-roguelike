@@ -121,6 +121,13 @@ fov.compute(px, py, radius, function(x, y, r, visibility) {
 
 `isWalkable(map, x, y)` checks terrain only (`tile !== 1 && tile !== 9`). Entity collision is checked separately — `canStep()` for enemies, `canStepOverworld()` for NPCs. Both block movement onto player and onto other entities of the same type.
 
+## Overworld patterns (see `_prompt.md` for full details)
+
+- **Zones**: detect zone from tile type → zone-specific HUD (bg color, name, actions). Makes each area feel distinct.
+- **NPC pace/idle**: `pace` (move every N turns), `idleTimer` (linger at goals), `turnCounter` (staggered starts). Desynchronizes NPC movement.
+- **NPC approach**: `wantsToTalk` flag → NPC sets goal to player → auto-initiates dialogue when adjacent → follows max 3 turns then gives up.
+- **Narrative-driven NPC**: `narrative:transition` listener marks NPCs as `wantsToTalk` when story changes. Daily reset restores flags.
+
 ## What to avoid
 
 - Real-time movement (must be turn-based)

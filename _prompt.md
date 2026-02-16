@@ -514,6 +514,120 @@ Choose the generator that fits the game concept:
 
 Games with **overworld + dungeon** (like a surface map plus underground levels) can use `ROT.Map.Cellular` for the organic overworld and `ROT.Map.Digger` for dungeons — both share the same `isWalkable()` callback and pathfinding system.
 
+## Overworld zones (optional pattern)
+
+Games with an overworld benefit from **zone detection** — the HUD, actions, and mood change based on where the player stands. Each zone gets its own name, color palette, and available actions.
+
+### Zone detection from tiles
+Tile types already carry semantic meaning. Map them to zones:
+```js
+var ZONES = {
+  home:    { bg: '#100e14', sep: '#2a2040', name: 'HOME',    nameColor: '#8878aa' },
+  market:  { bg: '#14100a', sep: '#302518', name: 'MARKET',  nameColor: '#c8a060' },
+  wilds:   { bg: '#0a120a', sep: '#1a3018', name: 'WILDS',   nameColor: '#6aaa5a' },
+  streets: { bg: '#0e0e10', sep: '#222228', name: 'STREETS', nameColor: '#7a7a88' }
+};
+
+function detectZone(tile, map, px, py) {
+  if (tile === 6) return 'home';
+  if (tile === 9) return 'market';
+  if (tile === 3) return 'wilds';
+  // Check adjacent tiles for context (walking NEAR a market = market zone)
+  var dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+  for (var d = 0; d < dirs.length; d++) {
+    var adj = map[py + dirs[d][1]] && map[py + dirs[d][1]][px + dirs[d][0]];
+    if (adj === 9) return 'market';
+    if (adj === 3) return 'wilds';
+  }
+  return 'streets';
+}
+```
+
+### Zone-aware HUD
+Each zone renders its own background color, separator, and name in the bottom panel. Actions are context-sensitive per zone. This makes each area feel distinct without touching narrative.
+
+```js
+// In overworldUI render layer:
+var zone = ZONES[detectZone(tile, state.owMap, px, py)];
+FA.draw.rect(0, uiY, W, H - uiY, zone.bg);
+FA.draw.rect(0, uiY, W, 1, zone.sep);
+FA.draw.text(zone.name, 8, uiY + 6, { color: zone.nameColor, size: 11, bold: true });
+```
+
+Zones are game-specific — define them in data.js or render.js based on the game's locations. The pattern works for any tile-based overworld.
+
+## NPC overworld behavior (optional pattern)
+
+Dungeon enemies use AI state machines. Overworld NPCs need a different system — they follow schedules, approach the player to talk, and have individual movement rhythms.
+
+### Pace and idle
+Not all NPCs should move in sync. Give each NPC a `pace` (move every N player turns) and an `idleTimer` (linger at destination before moving on):
+
+```js
+// In initNPCs:
+{ pace: 1, turnCounter: i, idleTimer: 0 }  // i = index for staggered start
+
+// In npcOverworldStep:
+npc.turnCounter++;
+if (npc.turnCounter % npc.pace !== 0) return;  // skip this turn
+
+// At goal: idle before picking new one
+if (atGoal) {
+  if (npc.idleTimer > 0) { npc.idleTimer--; return; }
+  selectNPCGoal(npc, state);
+  npc.idleTimer = FA.rand(2, 6);
+}
+```
+
+`turnCounter` starts at the NPC's index so even NPCs with the same pace don't move on the same turn.
+
+### Approach and auto-initiate dialogue
+NPCs approach the player when they have something to say (`wantsToTalk` flag). When adjacent, they auto-initiate dialogue — no `[SPACE]` needed from the player.
+
+```js
+// In selectNPCGoal: approach if wants to talk and player is nearby
+if (npc.wantsToTalk && !npc.talkedToday && dist < 8) { npc.goal = 'player'; return; }
+
+// In npcOverworldTurn: auto-initiate when adjacent
+if (npc.wantsToTalk && !npc.talkedToday && distToPlayer === 1) {
+  talkToNPC(npc, state);
+}
+```
+
+### Follow and give up
+NPCs follow the player for a limited number of turns, then give up and resume their schedule:
+
+```js
+if (npc.goal === 'player') {
+  npc.followTurns++;
+  if (npc.followTurns > 3) {
+    npc.wantsToTalk = false;
+    npc.followTurns = 0;
+    selectNPCGoal(npc, state);  // return to schedule
+  }
+}
+```
+
+### Narrative-driven desire to talk
+NPCs react to narrative graph transitions — when the story changes, they want to talk about it:
+
+```js
+FA.on('narrative:transition', function(data) {
+  if (data.graph === 'arc') {
+    // Major story beat — all NPCs react
+    for (var i = 0; i < state.npcs.length; i++) {
+      if (!state.npcs[i].talkedToday) state.npcs[i].wantsToTalk = true;
+    }
+  } else if (data.graph.indexOf('quest_') === 0) {
+    // Quest update — only that NPC reacts
+    var npcId = data.graph.replace('quest_', '');
+    // find and set wantsToTalk for that NPC
+  }
+});
+```
+
+Daily reset (`goToBed` or equivalent) restores `wantsToTalk = true` and `followTurns = 0` for all NPCs.
+
 ## What to avoid
 
 - Real-time movement (must be turn-based)
