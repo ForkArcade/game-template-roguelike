@@ -1,6 +1,6 @@
 # Roguelike — Game Design Prompt
 
-You are creating a roguelike game for the ForkArcade platform. The game uses multi-file architecture with the FA engine. This prompt describes proven patterns — use them as building blocks, adapt the theme and content to the game concept.
+You are creating a roguelike game for the ForkArcade platform. The game uses multi-file architecture with the FA engine and rot.js for roguelike algorithms. This prompt describes proven patterns — use them as building blocks, adapt the theme and content to the game concept.
 
 ## File architecture
 
@@ -8,6 +8,7 @@ You are creating a roguelike game for the ForkArcade platform. The game uses mul
 forkarcade-sdk.js   — PLATFORM: SDK (scoring, auth) — do not modify
 fa-narrative.js     — PLATFORM: narrative module — do not modify
 sprites.js          — generated from _sprites.json — do not modify manually
+rot.min.js          — ENGINE: rot.js roguelike toolkit (map gen, pathfinding, FOV) — do not modify
 fa-engine.js        — ENGINE: game loop, event bus, state, registry — do not modify
 fa-renderer.js      — ENGINE: canvas, layers, draw helpers — do not modify
 fa-input.js         — ENGINE: keyboard/mouse, keybindings — do not modify
@@ -31,20 +32,35 @@ Additional screen: `screen: 'cutscene'` — full-screen typewriter text at key m
 
 ---
 
-## Dungeon generation
+## Dungeon generation (rot.js)
 
-Room-based with L-shaped corridors. Proven pattern:
+Use `ROT.Map.Digger` for room-based dungeons. **Never hand-roll map generation.**
 
 ```js
 function generateFloor(cols, rows, depth, maxDepth) {
-  var map = createEmptyMap(cols, rows);  // fill with walls (1)
+  var cfg = FA.lookup('config', 'game');
+  var digger = new ROT.Map.Digger(cols, rows, {
+    roomWidth: [cfg.roomMinSize, cfg.roomMaxSize],
+    roomHeight: [cfg.roomMinSize, cfg.roomMaxSize],
+    dugPercentage: 0.35 + depth * 0.03  // deeper = more open
+  });
+
+  var map = [];
+  for (var y = 0; y < rows; y++) { map[y] = []; for (var x = 0; x < cols; x++) map[y][x] = 1; }
+  digger.create(function(x, y, value) { map[y][x] = value; });
+
+  // Convert ROT rooms to { x, y, w, h } format
+  var rotRooms = digger.getRooms();
   var rooms = [];
-  // Try placing random non-overlapping rooms
-  for (var attempt = 0; attempt < roomAttempts; attempt++) {
-    // random room { x, y, w, h }
-    // check overlap with 1-tile padding
-    // carve room, connect to previous room center via L-corridor
+  for (var r = 0; r < rotRooms.length; r++) {
+    var rr = rotRooms[r];
+    rooms.push({
+      x: rr.getLeft(), y: rr.getTop(),
+      w: rr.getRight() - rr.getLeft() + 1,
+      h: rr.getBottom() - rr.getTop() + 1
+    });
   }
+
   // Place stairs down in last room (tile 2), stairs up in first room (tile 3)
   // Place interactables (terminals/shrines/etc.) in middle rooms (tile 4)
   // Create explored[][] grid (all false)
@@ -52,9 +68,76 @@ function generateFloor(cols, rows, depth, maxDepth) {
 }
 ```
 
+**Alternative generators**: `ROT.Map.Uniform` (guaranteed-connected rooms), `ROT.Map.Cellular` (organic caves — good for overworld areas), `ROT.Map.Arena` (single open room for boss fights).
+
 Tile values: `0` = floor, `1` = wall, `2` = stairs down, `3` = stairs up, `4` = interactable, `5` = used interactable.
 
 Helper: `findEmptyInRooms(map, rooms, occupied)` — random empty floor tile not in occupied list.
+
+## FOV / Visibility (rot.js)
+
+Use `ROT.FOV.PreciseShadowcasting` for field of view. **Never hand-roll raycasting.**
+
+FOV is computed once per turn (not per frame) and stored in `state.visible`:
+
+```js
+function computeVisibility(map, px, py, radius) {
+  var rows = map.length, cols = map[0].length;
+  var vis = [];
+  for (var y = 0; y < rows; y++) { vis[y] = []; for (var x = 0; x < cols; x++) vis[y][x] = 0; }
+
+  var fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
+    if (x < 0 || x >= cols || y < 0 || y >= rows) return false;
+    return map[y][x] !== 1;
+  });
+
+  fov.compute(px, py, radius, function(x, y, r, visibility) {
+    if (x < 0 || x >= cols || y < 0 || y >= rows) return;
+    var light = r < 2 ? 1 : Math.max(0, 1 - (r - 2) / (radius - 2));
+    if (light > vis[y][x]) vis[y][x] = light;
+  });
+
+  return vis;  // 2D array, values 0..1
+}
+```
+
+Call in `endTurn()` and `beginPlaying()`:
+```js
+state.visible = computeVisibility(state.map, state.player.x, state.player.y, lightRadius);
+```
+
+The render.js lighting layer reads `state.visible` directly — no computation in the render loop.
+
+## Pathfinding (rot.js)
+
+Use `ROT.Path.AStar` for enemy movement. **Never hand-roll pathfinding.**
+
+```js
+function findPath(fromX, fromY, toX, toY, map) {
+  var path = [];
+  var astar = new ROT.Path.AStar(toX, toY, function(x, y) {
+    return isWalkable(map, x, y);
+  }, { topology: 4 });
+  astar.compute(fromX, fromY, function(x, y) { path.push({ x: x, y: y }); });
+  return path;  // path[0] = start, path[1] = next step
+}
+```
+
+Use in `moveToward()`:
+```js
+function moveToward(e, tx, ty, state, skipIdx) {
+  var path = findPath(e.x, e.y, tx, ty, state.map);
+  if (path.length >= 2) {
+    var next = path[1];
+    if (canStep(next.x, next.y, state, skipIdx)) {
+      e.x = next.x; e.y = next.y;
+      return true;
+    }
+  }
+  // Fallback to direct movement if A* blocked by entities
+  // ... axis-priority heuristic
+}
+```
 
 ## Multi-floor system
 
@@ -70,10 +153,11 @@ state.floors[depth] = { map, rooms, enemies, items, stairsDown, stairsUp, explor
 2. Generate new floor if `!state.floors[newDepth]`
 3. Load new floor's map/enemies/items/explored into state
 4. Place player at appropriate stairs position
+5. Recompute FOV: `state.visible = computeVisibility(state.map, state.player.x, state.player.y, lightRadius)`
 
 ## Movement & turn structure
 
-Turn cycle: player acts → `endTurn()` → `enemyTurn()` → `checkThoughts()`.
+Turn cycle: player acts → `endTurn()` → recompute FOV → `enemyTurn()` → `checkThoughts()`.
 
 ```js
 function movePlayer(dx, dy) {
@@ -81,6 +165,13 @@ function movePlayer(dx, dy) {
   // Check walkable → move
   // Check tile type: stairs (changeFloor), interactable (hack/use), floor (pickup items)
   // Call endTurn()
+}
+
+function endTurn() {
+  state.turn++;
+  state.visible = computeVisibility(state.map, state.player.x, state.player.y, lightRadius);
+  enemyTurn();
+  checkThoughts(state);
 }
 ```
 
@@ -107,11 +198,14 @@ Three states: `patrol → alert → hunting`. Each enemy has:
 6. Return action: `{ type: 'chase'|'flank'|'shoot'|'investigate'|'patrol'|'random'|'idle'|'attack' }`
 
 ### Bresenham LOS
+Keep simple Bresenham for point-to-point AI line-of-sight checks:
 ```js
 function hasLOS(map, x1, y1, x2, y2) {
   // Bresenham line, return false if hitting wall (map[y][x] === 1)
 }
 ```
+
+Note: Player FOV uses `ROT.FOV.PreciseShadowcasting`. Bresenham is only for enemy AI "can I see the player?" checks.
 
 ### Sound propagation
 Combat and abilities generate sound. Nearby enemies in patrol/alert switch to alert:
@@ -124,7 +218,7 @@ function propagateSound(state, x, y, radius) {
 ```
 
 ### Movement helpers
-- `moveToward(entity, tx, ty, state, skipIdx)` — prefer axis with greater distance, try alternatives
+- `moveToward(entity, tx, ty, state, skipIdx)` — A* pathfinding with direct movement fallback
 - `flankTarget(entity, tx, ty, state, skipIdx)` — move perpendicular to approach angle
 - `randomStep(entity, state, skipIdx)` — shuffle directions, try each
 
@@ -325,11 +419,26 @@ Sprites are optional — ASCII fallback is the base. Use `FA.draw.sprite(categor
 - **Player**: frame 0 = base, frame 1 = shielded/buffed
 - **Tiles**: frames for visual variants (e.g., frame 0 = normal, frame 1 = damaged)
 
+## Available map generators (rot.js)
+
+Choose the generator that fits the game concept:
+
+| Generator | Use case | Example |
+|-----------|----------|---------|
+| `ROT.Map.Digger` | Classic dungeon rooms + corridors | Standard dungeon crawl |
+| `ROT.Map.Uniform` | Rooms with guaranteed connectivity | Controlled layout with every room reachable |
+| `ROT.Map.Cellular` | Organic caves, natural terrain | Overworld areas, cave systems, organic maps |
+| `ROT.Map.Arena` | Single open room | Boss arenas, tutorial rooms |
+
+Games with **overworld + dungeon** (like a surface map plus underground levels) can use `ROT.Map.Cellular` for the organic overworld and `ROT.Map.Digger` for dungeons — both share the same `isWalkable()` callback and pathfinding system.
+
 ## What to avoid
 
 - Real-time movement (must be turn-based)
+- Hand-rolling dungeon generation — use `ROT.Map.*`
+- Hand-rolling pathfinding — use `ROT.Path.AStar`
+- Hand-rolling FOV / raycasting — use `ROT.FOV.PreciseShadowcasting`
 - Complex inventory/crafting systems
 - Animations between turns (instant feedback, floats for damage numbers)
-- Modifying ENGINE files (fa-*.js)
-- Implementing custom FOV — use the lighting layer pattern from render.js
+- Modifying ENGINE files (rot.min.js, fa-*.js)
 - Behaviors registered as functions — use AI state machine with string tags instead

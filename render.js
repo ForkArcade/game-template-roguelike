@@ -177,37 +177,15 @@
     }, 10);
 
     // === LIGHTING / FOV (z=15) ===
+    // Visibility is precomputed per turn via ROT.FOV.PreciseShadowcasting (see game.js)
+    // stored in state.visible as a 2D array [y][x] with values 0..1
     FA.addLayer('lighting', function() {
       var state = FA.getState();
       if (state.screen !== 'playing') return;
       if (!state.player) return;
       var ctx = FA.getCtx();
-      var p = state.player;
-
-      // Raycast FOV
-      var lightRadius = 10 - (state.depth || 1) * 0.5;
-      var vis = [];
-      for (var vy = 0; vy < cfg.rows; vy++) {
-        vis[vy] = [];
-        for (var vx = 0; vx < cfg.cols; vx++) vis[vy][vx] = 0;
-      }
-      vis[p.y][p.x] = 1;
-      var rays = 720;
-      for (var a = 0; a < rays; a++) {
-        var angle = (a / rays) * Math.PI * 2;
-        var dx = Math.cos(angle) * 0.5, dy = Math.sin(angle) * 0.5;
-        var rx = p.x + 0.5, ry = p.y + 0.5;
-        for (var d = 0; d < lightRadius * 2; d++) {
-          rx += dx; ry += dy;
-          var tx = Math.floor(rx), ty = Math.floor(ry);
-          if (tx < 0 || tx >= cfg.cols || ty < 0 || ty >= cfg.rows) break;
-          var dist = Math.sqrt((tx - p.x) * (tx - p.x) + (ty - p.y) * (ty - p.y));
-          if (dist > lightRadius) break;
-          var light = dist < 2 ? 1 : Math.max(0, 1 - (dist - 2) / (lightRadius - 2));
-          if (light > vis[ty][tx]) vis[ty][tx] = light;
-          if (state.map[ty][tx] === 1) break;
-        }
-      }
+      var vis = state.visible;
+      if (!vis) return;
 
       // Mark explored
       var explored = state.explored;

@@ -7,11 +7,12 @@ Procedural dungeons, permadeath, tile-based movement, turn-based combat.
 | File | Description |
 |------|-------------|
 | `data.js` | Data registration: `FA.register('enemies', ...)`, `FA.register('items', ...)`, config, modules, narrative, thoughts |
-| `game.js` | Logic: map generation, movement, combat, AI state machine, floor management, turns |
+| `game.js` | Logic: map generation (ROT.Map), pathfinding (ROT.Path), FOV (ROT.FOV), movement, combat, AI state machine, floor management, turns |
 | `render.js` | Render layers: map (autotiled walls), entities (with glow), lighting, effects, UI, overlays |
 | `main.js` | Entry point: keybindings, input routing, game loop timers, `ForkArcade.onReady/submitScore` |
 
 Template files (do not edit):
+- `rot.min.js` — rot.js roguelike toolkit (map gen, pathfinding, FOV, scheduling)
 - `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js` — engine
 
 Platform files (copied by platform, do not edit):
@@ -33,6 +34,53 @@ Platform files (copied by platform, do not edit):
 - **Effects**: `FA.addFloat(x, y, text, color, dur)`, `FA.addEffect(obj)`, `FA.updateFloats(dt)`, `FA.drawFloats()`, `FA.clearEffects()`
 - **Narrative**: `FA.narrative.init(cfg)`, `.transition(nodeId, event)`, `.setVar(name, val, reason)`, `.getVar(name)`, `.getNode()`, `.getEvents()`
 - **Utils**: `FA.rand(min,max)`, `FA.clamp(val,min,max)`, `FA.pick(arr)`, `FA.shuffle(arr)`, `FA.uid()`
+
+## rot.js API (window.ROT)
+
+rot.js provides battle-tested roguelike algorithms. **Use these instead of hand-rolling.**
+
+### Map Generation
+
+```js
+var digger = new ROT.Map.Digger(cols, rows, {
+  roomWidth: [min, max], roomHeight: [min, max], dugPercentage: 0.35
+});
+digger.create(function(x, y, value) { map[y][x] = value; });  // value: 0=floor, 1=wall
+var rooms = digger.getRooms();  // Room objects
+// Room API: room.getLeft(), getRight(), getTop(), getBottom(), getCenter() -> [cx, cy]
+```
+
+**Alternatives**: `ROT.Map.Uniform` (guaranteed connectivity), `ROT.Map.Cellular` (organic caves — good for overworlds), `ROT.Map.Arena` (single open room)
+
+### Pathfinding
+
+```js
+var astar = new ROT.Path.AStar(toX, toY, function(x, y) {
+  return isWalkable(map, x, y);
+}, { topology: 4 });
+var path = [];
+astar.compute(fromX, fromY, function(x, y) { path.push({x: x, y: y}); });
+// path[0] = start, path[1] = next step
+```
+
+### Field of View
+
+```js
+var fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
+  return map[y] && map[y][x] !== 1;  // light passes through non-walls
+});
+fov.compute(px, py, radius, function(x, y, r, visibility) {
+  // visibility: 0..1 — use for lighting falloff
+});
+```
+
+### DO NOT USE
+- `ROT.Display` — we have our own canvas renderer (`FA.draw.*`, `FA.addLayer()`)
+- `ROT.Engine` — we have our own game loop (`FA.setUpdate`, `FA.start`)
+
+### Available but optional
+- `ROT.RNG.setSeed(seed)` / `.getUniformInt(min, max)` / `.shuffle(arr)` — seedable RNG for reproducible runs
+- `ROT.Scheduler.Speed` — turn scheduling with varied actor speeds: actors implement `getSpeed()`, use `.add(actor, repeat)`, `.next()`
 
 ## Events
 
@@ -58,3 +106,12 @@ Platform files (copied by platform, do not edit):
 - **Enemies**: frame 0 = alive, frame 1 = dead/destroyed
 - **Player**: frame 0 = base, frame 1 = shielded/buffed
 - **Tiles**: frames for visual variants
+
+## What to avoid
+
+- Real-time movement (must be turn-based)
+- Hand-rolling dungeon generation, pathfinding, or FOV — use `ROT.Map.*`, `ROT.Path.AStar`, `ROT.FOV.PreciseShadowcasting`
+- Complex inventory/crafting systems
+- Animations between turns (instant feedback, floats for damage numbers)
+- Modifying ENGINE files (`rot.min.js`, `fa-*.js`)
+- Behaviors registered as functions — use AI state machine with string tags instead
