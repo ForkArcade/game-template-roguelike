@@ -404,10 +404,36 @@ FA.narrative.init({
         { from: 'defeat', to: 'explore' }
       ]
     }
-    // quest_* graphs added per quest/NPC relationship
+    // Quest graphs with conditional edges (auto-trigger on setVar)
+    quest_npc: {
+      startNode: 'stranger',
+      nodes: [
+        { id: 'stranger', label: 'Stranger', type: 'state' },
+        { id: 'acquaintance', label: 'Acquaintance', type: 'state' },
+        { id: 'confidant', label: 'Confidant', type: 'state' }
+      ],
+      edges: [
+        { from: 'stranger', to: 'acquaintance', var: 'npc_interactions', gte: 1 },
+        { from: 'acquaintance', to: 'confidant', var: 'npc_interactions', gte: 3 }
+      ]
+    }
   }
 });
 ```
+
+### Conditional edges
+Edges with `var` conditions auto-trigger when `setVar()` changes a variable. No game.js logic needed — define thresholds in data.js:
+```js
+// data.js — declarative
+edges: [
+  { from: 'stranger', to: 'acquaintance', var: 'npc_interactions', gte: 1 },  // auto
+  { from: 'routine', to: 'first_system' }  // manual — requires transition() call
+]
+
+// game.js — just set the variable, _evaluate() handles the rest
+FA.narrative.setVar('npc_interactions', prev + 1, 'Talked to NPC');
+```
+Conditions: `eq`, `gte`, `lte` (same syntax as `FA.select`). Keep dramatic beats (cutscenes, endings) as manual transitions via `showNarrative()`.
 
 ### showNarrative pattern (multi-graph)
 ```js

@@ -34,6 +34,7 @@ Platform files (copied by platform, do not edit):
 - **Effects**: `FA.addFloat(x, y, text, color, dur)`, `FA.addEffect(obj)`, `FA.updateFloats(dt)`, `FA.drawFloats()`, `FA.clearEffects()`
 - **Narrative**: `FA.narrative.init(cfg)`, `.transition(graphId, nodeId, event)`, `.setVar(name, val, reason)`, `.getVar(name)`, `.getNode(graphId)`, `.getEvents()`
 - **Content selection**: `FA.select(entries)` — first matching entry wins. Conditions: `{ node: 'graphId:nodeId' }`, `{ var: 'name', eq|gte|lte: val }`, no condition = fallback. Use for dialogues/thoughts.
+- **Conditional edges**: edges with `var`/`eq`/`gte`/`lte` auto-trigger on `setVar()`. Unconditional edges = manual `transition()` only. Use for NPC relationship graphs, progression thresholds.
 - **Utils**: `FA.rand(min,max)`, `FA.clamp(val,min,max)`, `FA.pick(arr)`, `FA.shuffle(arr)`, `FA.uid()`
 
 ## rot.js API (window.ROT)
