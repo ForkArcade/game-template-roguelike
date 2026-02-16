@@ -192,7 +192,7 @@
     FA.clearEffects();
     var narCfg = FA.lookup('config', 'narrative');
     if (narCfg) FA.narrative.init(narCfg);
-    showNarrative('start');
+    showNarrative('arc', 'start');
   }
 
   // === FLOOR TRANSITION ===
@@ -243,19 +243,24 @@
 
     FA.clearEffects();
     addMessage(direction === 'down' ? '> Descending to level ' + newDepth + '...' : '> Returning to level ' + newDepth + '...');
-    triggerThought('floor_enter', newDepth);
+    triggerThought('floor_enter');
   }
 
   // === NARRATIVE ===
 
-  function showNarrative(nodeId) {
-    FA.narrative.transition(nodeId);
+  function showNarrative(graphId, nodeId) {
+    FA.narrative.transition(graphId, nodeId);
     var narText = FA.lookup('narrativeText', nodeId);
     if (narText) {
       FA.getState().narrativeMessage = { text: narText.text, color: narText.color, life: 4000, maxLife: 4000 };
       addMessage(narText.text);
     }
     // TODO: check for cutscene definition and trigger if exists
+  }
+
+  function selectDialogue(npcId) {
+    var entry = FA.select(FA.lookup('dialogues', npcId));
+    return entry ? entry.text : null;
   }
 
   // === MOVEMENT ===
@@ -593,19 +598,17 @@
     state.lastThoughtTurn = state.turn;
   }
 
-  function triggerThought(category, key) {
+  function triggerThought(category) {
     var state = FA.getState();
     if (state.turn - (state.lastThoughtTurn || 0) < 5) return;
-    var thoughts = FA.lookup('config', 'thoughts');
-    if (!thoughts || !thoughts[category]) return;
-    var pool = key !== undefined ? thoughts[category][key] : thoughts[category];
-    if (!pool || !pool.length) return;
-    addThought(pool[Math.floor(Math.random() * pool.length)]);
+    var entry = FA.select(FA.lookup('thoughts', category));
+    if (!entry || !entry.pool || !entry.pool.length) return;
+    addThought(FA.pick(entry.pool));
   }
 
   function checkThoughts(state) {
     var prev = state._prevThought || {};
-    if (state.depth !== prev.depth) triggerThought('floor_enter', state.depth);
+    if (state.depth !== prev.depth) triggerThought('floor_enter');
     if (state.player.kills > (prev.kills || 0)) triggerThought('combat');
     if (state.player.hp < (prev.hp || state.player.maxHp)) {
       if (state.player.hp < state.player.maxHp * 0.3) triggerThought('low_health');

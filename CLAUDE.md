@@ -32,7 +32,8 @@ Platform files (copied by platform, do not edit):
 - **Input**: `FA.bindKey(action, keys)`, `FA.isAction(action)`, `FA.consumeClick()`
 - **Audio**: `FA.defineSound(name, fn)`, `FA.playSound(name)` — built-in: hit, pickup, death, step, spell, levelup
 - **Effects**: `FA.addFloat(x, y, text, color, dur)`, `FA.addEffect(obj)`, `FA.updateFloats(dt)`, `FA.drawFloats()`, `FA.clearEffects()`
-- **Narrative**: `FA.narrative.init(cfg)`, `.transition(nodeId, event)`, `.setVar(name, val, reason)`, `.getVar(name)`, `.getNode()`, `.getEvents()`
+- **Narrative**: `FA.narrative.init(cfg)`, `.transition(graphId, nodeId, event)`, `.setVar(name, val, reason)`, `.getVar(name)`, `.getNode(graphId)`, `.getEvents()`
+- **Content selection**: `FA.select(entries)` — first matching entry wins. Conditions: `{ node: 'graphId:nodeId' }`, `{ var: 'name', eq|gte|lte: val }`, no condition = fallback. Use for dialogues/thoughts.
 - **Utils**: `FA.rand(min,max)`, `FA.clamp(val,min,max)`, `FA.pick(arr)`, `FA.shuffle(arr)`, `FA.uid()`
 
 ## rot.js API (window.ROT)

@@ -43,16 +43,19 @@
   // === INTERACTABLE INTEL (random text from terminals/shrines) ===
   // FA.register('config', 'terminals', { intel: ['...', '...'] });
 
-  // === NARRATIVE ===
+  // === NARRATIVE (multi-graph) ===
   FA.register('config', 'narrative', {
-    startNode: 'start',
     variables: {},
-    graph: {
-      nodes: [
-        { id: 'start', label: 'Beginning', type: 'scene' }
-        // TODO: add act nodes, path nodes, ending nodes
-      ],
-      edges: []
+    graphs: {
+      arc: {
+        startNode: 'start',
+        nodes: [
+          { id: 'start', label: 'Beginning', type: 'scene' }
+          // TODO: add act nodes, path nodes, ending nodes
+        ],
+        edges: []
+      }
+      // quest_* graphs added per quest/NPC relationship
     }
   });
 
@@ -62,18 +65,22 @@
   // Cutscenes — full-screen typewriter text at key moments
   // FA.register('cutscenes', 'nodeId', { lines: ['...'], color: '#4ef', speed: 30 });
 
-  // === THOUGHTS (inner monologue — short lines, under 30 chars) ===
-  FA.register('config', 'thoughts', {
-    floor_enter: {
-      // keyed by depth: 1: ['...'], 2: ['...'], ...
-    },
-    combat: [],
-    damage: [],
-    low_health: [],
-    // pickup_gold: [],
-    // pickup_module: [],
-    // terminal_hack: [],
-    ambient: []
-  });
+  // === THOUGHTS (narrative-driven — FA.select pattern, first match wins) ===
+  // FA.register('thoughts', 'category', [
+  //   { var: 'depth', gte: 4, pool: ['Too deep...', 'The walls hum.'] },
+  //   { pool: ['Another level.', 'Deeper.'] }  // fallback
+  // ]);
+  FA.register('thoughts', 'floor_enter', [{ pool: [] }]);
+  FA.register('thoughts', 'combat', [{ pool: [] }]);
+  FA.register('thoughts', 'damage', [{ pool: [] }]);
+  FA.register('thoughts', 'low_health', [{ pool: [] }]);
+  FA.register('thoughts', 'ambient', [{ pool: [] }]);
+
+  // === DIALOGUES (narrative-driven — FA.select pattern, first match wins) ===
+  // FA.register('dialogues', 'npc_id', [
+  //   { node: 'quest_npc:allied', text: 'I found something useful.' },
+  //   { var: 'system_visits', gte: 3, text: 'You keep going deeper.' },
+  //   { text: 'Hello.' }  // fallback
+  // ]);
 
 })();

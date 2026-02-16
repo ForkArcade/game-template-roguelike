@@ -292,15 +292,30 @@ Random glitch bars with probability scaling by depth: `Math.random() < 0.002 * d
 
 Context-sensitive short thoughts (under 30 chars) displayed as floating bubble above player.
 
-### Data structure
+### Narrative-driven thoughts
+Thoughts use the `FA.select` pattern — priority-ordered arrays, first match wins. Register in data.js:
 ```js
-FA.register('config', 'thoughts', {
-  floor_enter: { 1: ['...', '...'], 2: ['...', '...'] },  // keyed by depth
-  combat: ['...', '...'],       // random from pool
-  damage: ['...', '...'],
-  low_health: ['...'],
-  ambient: ['...', '...']       // triggered every N turns
-});
+FA.register('thoughts', 'floor_enter', [
+  { var: 'depth', eq: 1, pool: ['First steps...', 'Here we go.'] },
+  { var: 'depth', gte: 4, pool: ['Too deep...', 'The walls hum.'] },
+  { pool: ['Another level.', 'Deeper.'] }  // fallback
+]);
+
+FA.register('thoughts', 'combat', [
+  { var: 'kills', gte: 10, pool: ['Too many.', 'Efficient.'] },
+  { pool: ['One less.', 'They fall.'] }
+]);
+```
+
+In game.js, select thought:
+```js
+function triggerThought(category) {
+  var state = FA.getState();
+  if (state.turn - (state.lastThoughtTurn || 0) < 5) return;
+  var entry = FA.select(FA.lookup('thoughts', category));
+  if (!entry || !entry.pool || !entry.pool.length) return;
+  addThought(FA.pick(entry.pool));
+}
 ```
 
 ### Trigger system
@@ -365,22 +380,39 @@ var openW = isOpen(map, x - 1, y);
 
 ## Narrative
 
-### Graph structure
-Define acts, paths, climax, endings. Use `FA.narrative.init()` with nodes and edges.
+### Multi-graph structure
+Define global arc + per-quest/situation graphs. Variables are global (shared across all graphs).
 
 ```js
-// Nodes: { id, label, type: 'scene' }
-// Edges: { from, to }
-// Register text: FA.register('narrativeText', nodeId, { text, color })
+FA.narrative.init({
+  variables: { day: 1, kills: 0, path: null },
+  graphs: {
+    arc: {
+      startNode: 'start',
+      nodes: [
+        { id: 'start', label: 'Beginning', type: 'scene' },
+        { id: 'explore', label: 'Exploration', type: 'scene' },
+        { id: 'climax', label: 'Climax', type: 'choice' },
+        { id: 'victory', label: 'Victory', type: 'scene' },
+        { id: 'defeat', label: 'Defeat', type: 'scene' }
+      ],
+      edges: [
+        { from: 'start', to: 'explore' },
+        { from: 'explore', to: 'climax' },
+        { from: 'climax', to: 'victory' },
+        { from: 'climax', to: 'defeat' },
+        { from: 'defeat', to: 'explore' }
+      ]
+    }
+    // quest_* graphs added per quest/NPC relationship
+  }
+});
 ```
 
-### Path detection
-Track player behavior (kills, stealth, collection) and assign a path when thresholds are met. Path determines climax and ending.
-
-### showNarrative pattern
+### showNarrative pattern (multi-graph)
 ```js
-function showNarrative(nodeId) {
-  FA.narrative.transition(nodeId);
+function showNarrative(graphId, nodeId) {
+  FA.narrative.transition(graphId, nodeId);
   var narText = FA.lookup('narrativeText', nodeId);
   if (narText) {
     state.narrativeMessage = { text: narText.text, color: narText.color, life: 4000, maxLife: 4000 };
@@ -389,6 +421,27 @@ function showNarrative(nodeId) {
   // Optionally trigger cutscene if defined
 }
 ```
+
+### Narrative-driven dialogues
+Priority-ordered arrays, first match wins. Register in data.js:
+```js
+FA.register('dialogues', 'npc_name', [
+  { node: 'quest_npc:allied', text: 'I found something useful.' },
+  { var: 'system_visits', gte: 3, text: 'You keep going deeper.' },
+  { text: 'Hello.' }  // fallback (no condition)
+]);
+```
+
+In game.js, select dialogue:
+```js
+function selectDialogue(npcId) {
+  var entry = FA.select(FA.lookup('dialogues', npcId));
+  return entry ? entry.text : null;
+}
+```
+
+### Path detection
+Track player behavior (kills, stealth, collection) and assign a path when thresholds are met. Path determines climax and ending.
 
 ## Message log
 
