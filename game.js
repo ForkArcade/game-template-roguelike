@@ -266,7 +266,7 @@
     var nx = state.player.x + dx;
     var ny = state.player.y + dy;
 
-    // Bump attack
+    // Bump attack (hostile)
     for (var i = 0; i < state.enemies.length; i++) {
       if (state.enemies[i].x === nx && state.enemies[i].y === ny) {
         attackEnemy(state.player, state.enemies[i], i);
@@ -276,6 +276,10 @@
     }
 
     if (!isWalkable(state.map, nx, ny)) return;
+
+    // Bump friendly NPC → swap positions (no tile sharing)
+    // TODO: if game has NPCs, check for NPC at (nx,ny) and swap
+
     state.player.x = nx;
     state.player.y = ny;
     FA.playSound('step');
