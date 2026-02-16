@@ -159,9 +159,12 @@ state.floors[depth] = { map, rooms, enemies, items, stairsDown, stairsUp, explor
 
 Turn cycle: player acts → `endTurn()` → recompute FOV → `enemyTurn()` → `checkThoughts()`.
 
+**Entity collision rule**: no two entities share a tile. Bump hostile → attack. Bump friendly NPC → swap positions.
+
 ```js
 function movePlayer(dx, dy) {
   // Check enemy at target → bump attack
+  // Check friendly NPC at target → swap positions
   // Check walkable → move
   // Check tile type: stairs (changeFloor), interactable (hack/use), floor (pickup items)
   // Call endTurn()

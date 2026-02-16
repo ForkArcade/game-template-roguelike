@@ -107,10 +107,23 @@ fov.compute(px, py, radius, function(x, y, r, visibility) {
 - **Player**: frame 0 = base, frame 1 = shielded/buffed
 - **Tiles**: frames for visual variants
 
+## Entity collision rules
+
+**No two entities may share a tile.** This applies to player, enemies, and NPCs on all maps.
+
+| Bump target | Result |
+|-------------|--------|
+| Hostile enemy | Attack (bump combat) |
+| Friendly NPC | Swap positions (player and NPC exchange tiles) |
+| System NPC (dungeon) | Talk (player stays, consumes turn) |
+
+`isWalkable(map, x, y)` checks terrain only (`tile !== 1 && tile !== 9`). Entity collision is checked separately — `canStep()` for enemies, `canStepOverworld()` for NPCs. Both block movement onto player and onto other entities of the same type.
+
 ## What to avoid
 
 - Real-time movement (must be turn-based)
 - Hand-rolling dungeon generation, pathfinding, or FOV — use `ROT.Map.*`, `ROT.Path.AStar`, `ROT.FOV.PreciseShadowcasting`
+- Letting entities share tiles — always check entity collision after terrain check
 - Complex inventory/crafting systems
 - Animations between turns (instant feedback, floats for damage numbers)
 - Modifying ENGINE files (`rot.min.js`, `fa-*.js`)
