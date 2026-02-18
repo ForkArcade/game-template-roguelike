@@ -1,46 +1,36 @@
 {
-  "style": "Dark fantasy pixel art — dark purple/blue tones, bright character accents",
+  "style": "Dark dungeon pixel art — dark purple/blue tones, bright character accents",
   "gridSize": "8x8 (rendered at 20x20 tile)",
   "palette": {
-    "wall-dark": "#1e1638",
-    "wall-lit": "#362a5c",
-    "wall-top": "#4a3a7a",
-    "floor-dark": "#0d0b1a",
-    "floor-lit": "#201c3a",
-    "player": "#4ef",
-    "attack": "#fa4",
-    "health": "#f4a",
-    "mana": "#48f",
-    "gold": "#fd4",
-    "magic": "#f4f",
-    "damage": "#f44",
-    "heal": "#4f4"
+    "wall-dark": "#2d2d44",
+    "wall-cap": "#3d3d5c",
+    "wall-face": "#2a2248",
+    "floor-dark": "#0a0a12",
+    "floor-alt": "#0f0d1c",
+    "player": "#4fc3f7",
+    "gold": "#ffd54f",
+    "potion": "#e91e63",
+    "stairs": "#4caf50",
+    "damage": "#ef5350",
+    "heal": "#4caf50"
   },
   "frameConvention": {
-    "enemies": "frame 0 = alive, frame 1 = dead/destroyed variant",
-    "player": "frame 0 = base, frame 1 = shielded/buffed",
-    "tiles": "frames for visual variants (e.g. normal, damaged, lit)"
+    "enemies": "frame 0 = alive, frame 1 = dead variant",
+    "player": "frame 0 = base",
+    "items": "frame 0 = default"
   },
   "categories": {
-    "tiles": {
-      "sprites": ["wall", "wallLit", "floor", "floorLit", "stairs"],
-      "desc": "Dungeon tiles — walls, floors, stairs"
-    },
     "enemies": {
-      "sprites": ["rat", "phantom", "mage", "armor", "golem", "archmage"],
-      "desc": "Monsters — small to boss. Each sprite has alive (frame 0) and dead (frame 1) variants"
+      "sprites": ["rat", "snake", "golem"],
+      "desc": "Monsters matching data.js types — rat (brown), snake (green), golem (grey)"
     },
     "items": {
-      "sprites": ["potion", "mana", "gold", "weapon", "armor", "spellbook"],
-      "desc": "Collectible items"
+      "sprites": ["gold", "potion"],
+      "desc": "Collectibles — gold coin, health potion"
     },
     "player": {
-      "sprites": ["base", "shielded"],
-      "desc": "Player character"
-    },
-    "effects": {
-      "sprites": ["hit", "heal", "spell"],
-      "desc": "Visual effects for combat and magic"
+      "sprites": ["base"],
+      "desc": "Player character — cyan accent"
     }
   }
 }

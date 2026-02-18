@@ -1,142 +1,57 @@
-// Roguelike — Entry Point
-// Keybindings, input routing, game loop timers, ForkArcade integration
 (function() {
   'use strict';
   var FA = window.FA;
   var cfg = FA.lookup('config', 'game');
-  var colors = FA.lookup('config', 'colors');
 
-  FA.initCanvas('game', cfg.canvasWidth, cfg.canvasHeight);
+  FA.initCanvas('game', cfg.canvasW, cfg.canvasH);
 
-  // Keybindings
-  FA.bindKey('up',    ['ArrowUp',    'w']);
-  FA.bindKey('down',  ['ArrowDown',  's']);
-  FA.bindKey('left',  ['ArrowLeft',  'a']);
+  FA.bindKey('up', ['ArrowUp', 'w']);
+  FA.bindKey('down', ['ArrowDown', 's']);
+  FA.bindKey('left', ['ArrowLeft', 'a']);
   FA.bindKey('right', ['ArrowRight', 'd']);
+  FA.bindKey('start', [' ', 'Enter']);
   FA.bindKey('restart', ['r']);
-  FA.bindKey('start',   [' ', 'Enter']);
-  FA.bindKey('mod1', ['1']);
-  FA.bindKey('mod2', ['2']);
-  FA.bindKey('mod3', ['3']);
 
-  // Input handling — screen-based routing
   FA.on('input:action', function(data) {
     var state = FA.getState();
-
-    // Start screen
-    if (state.screen === 'start' && data.action === 'start') {
-      Game.begin();
-      return;
-    }
-
-    // Cutscene — Space to skip/dismiss
-    if (state.screen === 'cutscene' && data.action === 'start') {
-      Game.dismissCutscene();
-      return;
-    }
-
-    // Game over
-    if ((state.screen === 'victory' || state.screen === 'defeat') && data.action === 'restart') {
-      Game.start();
-      return;
-    }
-
-    // Playing
+    if (state.screen === 'start' && data.action === 'start') { Game.begin(); return; }
+    if ((state.screen === 'victory' || state.screen === 'defeat') && data.action === 'restart') { Game.start(); return; }
     if (state.screen !== 'playing') return;
-
-    // Space dismisses thought bubble
-    if (data.action === 'start' && state.thoughts && state.thoughts.length > 0) {
-      Game.dismissThought();
-      return;
-    }
-
     switch (data.action) {
-      case 'up':    Game.movePlayer(0, -1); break;
-      case 'down':  Game.movePlayer(0, 1);  break;
-      case 'left':  Game.movePlayer(-1, 0); break;
-      case 'right': Game.movePlayer(1, 0);  break;
-      case 'mod1':  Game.useModule(0); break;
-      case 'mod2':  Game.useModule(1); break;
-      case 'mod3':  Game.useModule(2); break;
+      case 'up': Game.movePlayer(0, -1); break;
+      case 'down': Game.movePlayer(0, 1); break;
+      case 'left': Game.movePlayer(-1, 0); break;
+      case 'right': Game.movePlayer(1, 0); break;
     }
   });
 
-  // Score submission
   FA.on('game:over', function(data) {
-    if (typeof ForkArcade !== 'undefined') {
-      ForkArcade.submitScore(data.score);
-    }
+    if (typeof ForkArcade !== 'undefined') ForkArcade.submitScore(data.score);
   });
 
-  // Game loop — timers and physics
   FA.setUpdate(function(dt) {
     FA.updateEffects(dt);
     FA.updateFloats(dt);
-
     var state = FA.getState();
-
-    // Narrative message countdown
-    if (state.narrativeMessage && state.narrativeMessage.life > 0) {
-      state.narrativeMessage.life -= dt;
-    }
-
-    // Cutscene typewriter
-    if (state.screen === 'cutscene' && state.cutscene && !state.cutscene.done) {
-      state.cutscene.timer += dt;
-      if (state.cutscene.timer >= state.cutscene.totalChars * state.cutscene.speed) {
-        state.cutscene.done = true;
-      }
-    }
-
-    // Thought typewriter + lifecycle
-    if (state.thoughts) {
-      for (var ti = state.thoughts.length - 1; ti >= 0; ti--) {
-        var th = state.thoughts[ti];
-        if (!th.done) {
-          th.timer += dt;
-          if (th.timer >= th.text.length * th.speed) th.done = true;
-        } else {
-          th.life -= dt;
-        }
-      }
-      while (state.thoughts.length > 0 && state.thoughts[0].done && state.thoughts[0].life <= 0) {
-        state.thoughts.shift();
-      }
-    }
-
-    // Screen shake decay
     if (state.shake > 0) {
       state.shakeX = (Math.random() - 0.5) * state.shake;
       state.shakeY = (Math.random() - 0.5) * state.shake;
       state.shake -= dt * 0.012;
       if (state.shake < 0) { state.shake = 0; state.shakeX = 0; state.shakeY = 0; }
     }
-
-    // Kill particles
     if (state.particles) {
-      for (var pi = state.particles.length - 1; pi >= 0; pi--) {
-        var pt = state.particles[pi];
-        pt.x += pt.vx * dt / 1000;
-        pt.y += pt.vy * dt / 1000;
-        pt.vx *= 0.97; pt.vy *= 0.97;
-        pt.life -= dt;
-        if (pt.life <= 0) state.particles.splice(pi, 1);
-      }
-    }
-
-    // Sound waves
-    if (state.soundWaves) {
-      for (var wi = state.soundWaves.length - 1; wi >= 0; wi--) {
-        state.soundWaves[wi].life -= dt;
-        if (state.soundWaves[wi].life <= 0) state.soundWaves.splice(wi, 1);
+      for (var i = state.particles.length - 1; i >= 0; i--) {
+        var p = state.particles[i];
+        p.x += p.vx * dt / 1000; p.y += p.vy * dt / 1000;
+        p.vx *= 0.97; p.vy *= 0.97; p.life -= dt;
+        if (p.life <= 0) state.particles.splice(i, 1);
       }
     }
   });
 
-  // Render with screen shake
   FA.setRender(function() {
-    FA.draw.clear(colors.bg);
     var state = FA.getState();
+    FA.draw.clear(FA.lookup('config', 'colors').bg);
     var ctx = FA.getCtx();
     var sx = state.shakeX || 0, sy = state.shakeY || 0;
     if (sx || sy) ctx.translate(sx, sy);
@@ -144,13 +59,8 @@
     if (sx || sy) ctx.translate(-sx, -sy);
   });
 
-  // Start
   Render.setup();
   Game.start();
-
-  if (typeof ForkArcade !== 'undefined') {
-    ForkArcade.onReady(function() {});
-  }
-
+  if (typeof ForkArcade !== 'undefined') ForkArcade.onReady(function() {});
   FA.start();
 })();

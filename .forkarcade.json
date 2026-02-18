@@ -1,5 +1,5 @@
 {
   "template": "roguelike",
   "engineFiles": ["rot.min.js", "fa-engine.js", "fa-renderer.js", "fa-input.js", "fa-audio.js"],
-  "gameFiles": ["data.js", "game.js", "render.js", "main.js"]
+  "gameFiles": ["data.js", "core.js", "game.js", "render.js", "main.js"]
 }
