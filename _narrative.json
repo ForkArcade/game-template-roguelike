@@ -1,0 +1,17 @@
+{
+  "graphs": {
+    "arc": {
+      "startNode": "start",
+      "nodes": [
+        { "id": "start", "label": "Start", "type": "scene" }
+      ],
+      "edges": []
+    }
+  },
+  "variables": {},
+  "actors": {},
+  "scenes": [],
+  "content": {},
+  "simulation": {}
+}
+
