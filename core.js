@@ -76,7 +76,9 @@
         name: def.name, char: def.char, color: def.color, behavior: key,
         hp: Math.ceil(def.hp * scale), maxHp: Math.ceil(def.hp * scale),
         atk: Math.ceil(def.atk * scale), def: def.def, speed: def.speed,
-        aiState: 'patrol', patrolTarget: null, turnWait: 0
+        sightRange: def.sightRange || 8,
+        aiState: 'patrol', alertTarget: null, alertTimer: 0,
+        patrolTarget: null, turnWait: 0, stunTurns: 0
       });
     }
     var goldCount = 2 + depth;
@@ -139,10 +141,10 @@
     var astar = new ROT.Path.AStar(tx, ty, function(x, y) { return isWalkable(state.map, x, y); }, { topology: 4 });
     astar.compute(e.x, e.y, function(x, y) { path.push({ x: x, y: y }); });
     if (path.length >= 2 && canStep(path[1].x, path[1].y, e)) { e.x = path[1].x; e.y = path[1].y; return; }
-    var dx = tx - e.x, dy = ty - e.y;
-    var moves = Math.abs(dx) >= Math.abs(dy)
-      ? [{ x: dx > 0 ? 1 : -1, y: 0 }, { x: 0, y: dy > 0 ? 1 : -1 }]
-      : [{ x: 0, y: dy > 0 ? 1 : -1 }, { x: dx > 0 ? 1 : -1, y: 0 }];
+    var ddx = tx - e.x, ddy = ty - e.y;
+    var moves = Math.abs(ddx) >= Math.abs(ddy)
+      ? [{ x: ddx > 0 ? 1 : -1, y: 0 }, { x: 0, y: ddy > 0 ? 1 : -1 }]
+      : [{ x: 0, y: ddy > 0 ? 1 : -1 }, { x: ddx > 0 ? 1 : -1, y: 0 }];
     for (var i = 0; i < moves.length; i++) {
       var nx = e.x + moves[i].x, ny = e.y + moves[i].y;
       if (canStep(nx, ny, e)) { e.x = nx; e.y = ny; return; }
@@ -179,14 +181,43 @@
 
   function changeMap(id, sx, sy) {
     var state = FA.getState();
-    state.mapId = id; state.map = state.maps[id].grid; state.depth = id;
+    state.mapId = id; state.map = state.maps[id].grid;
+    state.depth = Location.depth(id) || id;
     state.player.x = sx; state.player.y = sy;
+  }
+
+  // === BUBBLE SYSTEM ===
+
+  function addSystemBubble(text, color) {
+    var state = FA.getState();
+    if (!state.bubbleQueue) state.bubbleQueue = [];
+    var lines = typeof text === 'string' ? text.split('\n') : text;
+    state.bubbleQueue.push({ lines: lines, color: color || FA.lookup('config', 'colors').bubble, timer: 0, done: false });
+    if (!state.systemBubble) advanceBubble();
+  }
+
+  function advanceBubble() {
+    var state = FA.getState();
+    if (!state.bubbleQueue || state.bubbleQueue.length === 0) {
+      state.systemBubble = null;
+      return;
+    }
+    state.systemBubble = state.bubbleQueue.shift();
+  }
+
+  function dismissBubble() {
+    var state = FA.getState();
+    if (!state.systemBubble) return false;
+    if (!state.systemBubble.done) return false;
+    advanceBubble();
+    return true;
   }
 
   window.Core = {
     generateFloor: generateFloor, populateFloor: populateFloor, findEmpty: findEmpty,
     isWalkable: isWalkable, canStep: canStep, getEntityAt: getEntityAt,
     hasLOS: hasLOS, moveToward: moveToward, randomStep: randomStep,
-    computeVisibility: computeVisibility, changeMap: changeMap
+    computeVisibility: computeVisibility, changeMap: changeMap,
+    addSystemBubble: addSystemBubble, dismissBubble: dismissBubble
   };
 })();
