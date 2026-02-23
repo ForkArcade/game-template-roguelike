@@ -2,5 +2,5 @@
   "template": "roguelike",
   "engineVersion": 1,
   "engineFiles": ["rot.min.js", "fa-narrative.js"],
-  "gameFiles": ["text-fx.js", "data.js", "locations.js", "core.js", "combat.js", "game.js", "render.js", "render-ui.js", "main.js"]
+  "gameFiles": ["data.js", "locations.js", "core.js", "combat.js", "game.js", "render.js", "render-ui.js", "main.js"]
 }

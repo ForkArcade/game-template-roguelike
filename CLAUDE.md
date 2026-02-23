@@ -13,10 +13,9 @@ Procedural dungeons, permadeath, tile-based movement, turn-based combat.
 | `game.js` | Movement, floor transitions, turn flow, lifecycle (`window.Game`) |
 | `render.js` | Map tiles, entities, lighting, particles (`window.Render`) |
 | `render-ui.js` | HUD, start/gameover screens, system bubbles, floats (`window.RenderUI`) |
-| `text-fx.js` | Split-flap typewriter animation (`window.TextFX`) |
 | `main.js` | Entry point: canvas, keys, input routing, update/render loops |
 
-Do not edit: `rot.min.js`, `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js`, `fa-narrative.js`, `forkarcade-sdk.js`, `sprites.js`
+Do not edit: `rot.min.js`, `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js`, `fa-textfx.js`, `fa-narrative.js`, `forkarcade-sdk.js`, `sprites.js`
 
 ## Engine API (window.FA)
 
@@ -86,9 +85,11 @@ astar.compute(fromX, fromY, function(x, y) { path.push({x,y}); });
 - `Core.addSystemBubble(text, color)` — queue a message (string or array of lines)
 - `Core.dismissBubble()` — dismiss current bubble, advance queue
 
-### TextFX (text-fx.js)
-- `TextFX.render(ctx, text, elapsed, x, y, opts)` — split-flap animation
-- `TextFX.totalTime(text, opts)` — total reveal duration
+### TextFX (engine: fa-textfx.js)
+- `FA.textFX.render(ctx, text, elapsed, x, y, opts)` — split-flap animation
+- `FA.textFX.totalTime(text, opts)` — total reveal duration
+- `FA.textFX.charWidth(ctx, size, bold)` — monospace char width (cached)
+- Also available as `window.TextFX` for backward compat
 
 ## Tile values
 
