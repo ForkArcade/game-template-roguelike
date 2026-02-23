@@ -6,16 +6,17 @@ Procedural dungeons, permadeath, tile-based movement, turn-based combat.
 
 | File | Description |
 |------|-------------|
-| `data.js` | Config, locations, enemy types, item types, AI config, sounds (`FA.register`) |
-| `locations.js` | Location registry query API (`window.Location`) |
-| `core.js` | Map gen, FOV, pathfinding, collision, map registry, bubble system (`window.Core`) |
+| `data.js` | Config, locations, enemy types, item types, sounds (`GAME_DATA` + batch `FA.register`) |
+| `core.js` | Location API, map gen, FOV, pathfinding, collision, map registry, bubble system |
 | `combat.js` | Attack, pickup, 3-state AI, enemy turns (`window.Combat`) |
 | `game.js` | Movement, floor transitions, turn flow, lifecycle (`window.Game`) |
 | `render.js` | Map tiles, entities, lighting, particles (`window.Render`) |
 | `render-ui.js` | HUD, start/gameover screens, system bubbles, floats (`window.RenderUI`) |
 | `main.js` | Entry point: canvas, keys, input routing, update/render loops |
 
-Do not edit: `rot.min.js`, `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-audio.js`, `fa-textfx.js`, `fa-narrative.js`, `forkarcade-sdk.js`, `sprites.js`
+Generated per-game (not in template): `sprites.js`, `maps.js` (from `_sprites.json`, `_maps.json` via MCP tools)
+
+Do not edit (CDN @2.3.0): `fa-engine.js`, `fa-renderer.js`, `fa-input.js`, `fa-ui.js`, `fa-audio.js`, `fa-textfx.js`, `fa-narrative.js`, `rot.min.js`, `skins/cyber.js`, `forkarcade-sdk.js`
 
 ## Engine API (window.FA)
 
@@ -68,7 +69,7 @@ astar.compute(fromX, fromY, function(x, y) { path.push({x,y}); });
 
 ## Module APIs
 
-### Location (locations.js)
+### Location (core.js)
 - `Location.get(mapId)` → location def or null
 - `Location.depth(mapId)` → depth number
 - `Location.isDungeon(mapId)` → boolean
@@ -110,32 +111,11 @@ astar.compute(fromX, fromY, function(x, y) { path.push({x,y}); });
 | `Core.randomStep(e)` | Shuffle + try 4 dirs |
 | `Core.changeMap(id, sx, sy)` | Switch map via Location registry |
 
-## Turn cycle
-
-`movePlayer(dx,dy)` → bump attack or move → pickup items → stairs → `endTurn()` → FOV → `Combat.enemyTurn()`
-
-## AI (3 states: patrol → alert → hunting)
-
-- **patrol** — wander between random room centers
-- **alert** — investigate last known position, timeout after `config.ai.alertTimeout` turns
-- **hunting** — LOS to player → A* chase; adjacent → attack
-
-Enemy state shown as indicator: `!` (hunting), `?` (alert).
-
-Entity fields: `aiState`, `alertTarget`, `alertTimer`, `patrolTarget`, `stunTurns`, `sightRange`.
-
-## Combat
-
-`dmg = max(1, atk - def + rand(-1, 2))` — floats for damage numbers, screen shake on player hit, burst particles on kill.
-
-## Scoring
-
-`kills × 100 + gold × 10 + (maxDepth-1) × 500` — submitted via `ForkArcade.submitScore()`.
-
 ## Data-driven pattern
 
-All tunable values in `data.js` via `FA.register()`. Game code reads via `FA.lookup()`:
+All tunable values in `data.js` via `GAME_DATA` object + batch `FA.register()`. Game code reads via `FA.lookup()`:
 - `FA.lookup('config', 'game')` — canvas, grid, depth config
+- `FA.lookup('config', 'layout')` — engine layout (tile type, panel)
 - `FA.lookup('config', 'colors')` — all colors
 - `FA.lookup('config', 'ai')` — sight range, alert timeout
 - `FA.lookup('config', 'bubble')` — timing, colors
@@ -149,6 +129,8 @@ All tunable values in `data.js` via `FA.register()`. Game code reads via `FA.loo
 ## Sprites
 
 `FA.draw.sprite(cat, name, x, y, size, fallbackChar, fallbackColor, frame)` — ASCII fallback when no sprite exists.
+
+Sprites generated per-game from `_sprites.json` via MCP `create_sprite` tool → `sprites.js`.
 
 ## Layer order
 
@@ -164,11 +146,29 @@ All tunable values in `data.js` via `FA.register()`. Game code reads via `FA.loo
 | 30 | hud | render-ui.js |
 | 40 | gameOver | render-ui.js |
 
+## Turn cycle
+
+`movePlayer(dx,dy)` → bump attack or move → pickup items → stairs → `endTurn()` → FOV → `Combat.enemyTurn()`
+
+## AI (3 states: patrol → alert → hunting)
+
+- **patrol** — wander between random room centers
+- **alert** — investigate last known position, timeout after `config.ai.alertTimeout` turns
+- **hunting** — LOS to player → A* chase; adjacent → attack
+
+## Combat
+
+`dmg = max(1, atk - def + rand(-1, 2))` — floats for damage numbers, screen shake on player hit, burst particles on kill.
+
+## Scoring
+
+`kills × 100 + gold × 10 + (maxDepth-1) × 500` — submitted via `ForkArcade.submitScore()`.
+
 ## What to avoid
 
 - Real-time movement (must be turn-based)
 - Hand-rolling map gen / pathfinding / FOV — use rot.js
 - Letting entities share tiles
 - Animations between turns (use instant floats)
-- Modifying engine files
+- Modifying engine CDN files
 - Hardcoding values in JS — use FA.register/lookup

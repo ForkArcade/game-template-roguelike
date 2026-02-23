@@ -2,6 +2,21 @@
   'use strict';
   var FA = window.FA;
 
+  // === LOCATION REGISTRY ===
+
+  function locGet(mapId) { return FA.lookup('locations', mapId) || null; }
+  function locDepth(mapId) { var l = locGet(mapId); return l ? (l.depth || 0) : 0; }
+  function locIsDungeon(mapId) { var l = locGet(mapId); return l ? !!l.dungeon : false; }
+  function locPalette(mapId) { var l = locGet(mapId); return l ? (l.palette || null) : null; }
+  function locHasEffect(mapId, name) {
+    var l = locGet(mapId);
+    if (!l || !l.effects) return false;
+    for (var i = 0; i < l.effects.length; i++) { if (l.effects[i] === name) return true; }
+    return false;
+  }
+
+  window.Location = { get: locGet, depth: locDepth, isDungeon: locIsDungeon, palette: locPalette, hasEffect: locHasEffect };
+
   // === MAP GENERATION ===
 
   function generateFloor(cols, rows, depth, maxDepth) {
